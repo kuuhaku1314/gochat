@@ -130,6 +130,13 @@ func (s *Server) AddHandler(code common.MessageCode, handler common.Handler) {
 		s.logger.Fatal("duplicate handler")
 	}
 	s.handlerMap[code] = handler
+	handler.OnInit()
+}
+
+func (s *Server) AddInterceptor(i Interceptor) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.interceptors = append(s.interceptors, i)
 }
 
 func (s *Server) Serve() {
@@ -167,34 +174,41 @@ func (s *Server) handleConn(conn net.Conn) {
 		return
 	}
 	s.logger.Info(fmt.Sprintf("connecting completed, remote address=%s", conn.RemoteAddr()))
-
+	s.clientPool.Store(conn.RemoteAddr(), conn)
+	ctx := &ServerContext{
+		remoteAddr: conn.RemoteAddr().String(),
+		localAddr:  conn.LocalAddr().String(),
+	}
+	ch := &ChannelWrapper{
+		Channel:       common.NewSimpleChannel(codec, conn),
+		ServerContext: ctx,
+		Server:        s,
+	}
+	ctx.Channel = ch
+	for _, handler := range s.handlerMap {
+		handler.OnActive(ctx)
+	}
 	for {
-		message := &common.RawMessage{}
-		if err := codec.Decode(message); err != nil {
+		message, err := ctx.Read()
+		if err != nil {
 			s.logger.Info(err)
-			return
+			break
 		}
-		ctx := &ServerContext{
-			remoteAddr: conn.RemoteAddr().String(),
-			localAddr:  conn.LocalAddr().String(),
-		}
-		ch := &ChannelWrapper{
-			Channel:       common.NewSimpleChannel(codec, conn),
-			ServerContext: ctx,
-			Server:        s,
-		}
-		ctx.Channel = ch
 		handler, ok := s.handlerMap[message.Code]
 		if !ok {
 			s.logger.Info(fmt.Sprintf("not have matchable handler, remote address=%s",
 				conn.RemoteAddr().String()))
-			return
+			break
 		}
 		if err = handler.Do(ctx, message.RawData); err != nil {
 			s.logger.Error(err)
 		}
 		if ctx.isClosed {
-			return
+			break
 		}
+	}
+	s.clientPool.Delete(conn.RemoteAddr())
+	for _, handler := range s.handlerMap {
+		handler.OnClose(ctx)
 	}
 }

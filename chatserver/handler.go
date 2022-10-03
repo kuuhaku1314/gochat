@@ -33,6 +33,7 @@ var (
 )
 
 type LoginHandler struct {
+	common.BaseHandler
 	onlineUserMap *sync.Map
 }
 
@@ -73,8 +74,17 @@ func (h *LoginHandler) Do(ctx common.Context, rawMessage json.RawMessage) error 
 		h.removeOnlineUser(user.Addr())
 		_ = ctx.Close()
 	}
-	go h.broadcastUserLoginEvent(user)
+	go h.broadcastMessage(user, user.NickName+"上线了")
 	return nil
+}
+
+func (h *LoginHandler) OnClose(ctx common.Context) {
+	user, ok := GetOnlineUser(ctx.RemoteAddr())
+	if !ok {
+		return
+	}
+	h.removeOnlineUser(ctx.RemoteAddr())
+	go h.broadcastMessage(user, user.NickName+"下线了")
 }
 
 func (h *LoginHandler) addOnlineUser(user *OnlineUser) {
@@ -89,7 +99,7 @@ func (h *LoginHandler) removeOnlineUser(addr string) {
 	}
 }
 
-func (h *LoginHandler) broadcastUserLoginEvent(user *OnlineUser) {
+func (h *LoginHandler) broadcastMessage(user *OnlineUser, msg string) {
 	users := GetOnlineUsers(1000)
 	for i := range users {
 		if user.Addr() == users[i].Addr() {
@@ -97,7 +107,7 @@ func (h *LoginHandler) broadcastUserLoginEvent(user *OnlineUser) {
 		}
 		err := users[i].ctx.Write(&common.Message{
 			Code:    enum.Echo,
-			RawData: user.NickName + "上线了",
+			RawData: msg,
 		})
 		if err != nil {
 			h.removeOnlineUser(users[i].Addr())
@@ -124,9 +134,15 @@ func GetOnlineUsers(limit int) []*OnlineUser {
 	return users
 }
 
-type OnlineUserListHandler struct{}
+type onlineUserListHandler struct {
+	common.BaseHandler
+}
 
-func (h *OnlineUserListHandler) Do(ctx common.Context, _ json.RawMessage) error {
+func NewOnlineUserListHandler() *onlineUserListHandler {
+	return &onlineUserListHandler{}
+}
+
+func (h *onlineUserListHandler) Do(ctx common.Context, _ json.RawMessage) error {
 	users := GetOnlineUsers(1000)
 	builder := &strings.Builder{}
 	builder.WriteString(fmt.Sprintf("online user number: %d\n", len(users)))

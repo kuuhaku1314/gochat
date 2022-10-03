@@ -55,6 +55,7 @@ func NewClient(address string) (*Client, error) {
 
 func (c *Client) AddHandler(code common.MessageCode, handler common.Handler) {
 	c.handlerMap[code] = handler
+	handler.OnInit()
 }
 
 func (c *Client) Close() error {
@@ -88,6 +89,14 @@ func (c *Client) Start() {
 			}
 		}
 	}()
+	ctx := &ClientContext{
+		remoteAddr: c.conn.RemoteAddr().String(),
+		localAddr:  c.conn.LocalAddr().String(),
+		Channel:    common.NewSimpleChannel(c.codec, c.conn),
+	}
+	for _, handler := range c.handlerMap {
+		handler.OnActive(ctx)
+	}
 	for {
 		if c.isClosed {
 			break
@@ -102,17 +111,15 @@ func (c *Client) Start() {
 			log.Println("unknown message", message)
 			continue
 		}
-		ctx := &ClientContext{
-			remoteAddr: c.conn.RemoteAddr().String(),
-			localAddr:  c.conn.LocalAddr().String(),
-			Channel:    common.NewSimpleChannel(c.codec, c.conn),
-		}
 		if err := handler.Do(ctx, message.RawData); err != nil {
 			log.Println(err)
 			continue
 		}
 	}
 	_ = c.Close()
+	for _, handler := range c.handlerMap {
+		handler.OnClose(ctx)
+	}
 }
 
 func (c *Client) SendMessage(message *common.Message) {

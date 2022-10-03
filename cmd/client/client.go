@@ -10,20 +10,22 @@ import (
 )
 
 func main() {
-	newClient, err := chatclient.NewClient("localhost:8080")
+	cli, err := chatclient.NewClient("localhost:8080")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	newClient.AddHandler(enum.Echo, common.NewEchoHandler(
+	cli.AddHandler(enum.Ping, common.NewPingHandler(enum.Pong))
+	cli.AddHandler(enum.Echo, common.NewEchoHandler(
 		func(msg string) error {
 			fmt.Println(msg)
 			return nil
 		}))
+
 	go func() {
 		time.Sleep(time.Second * 3)
 		fmt.Println("try login")
-		newClient.SendMessage(&common.Message{
+		cli.SendMessage(&common.Message{
 			Code: enum.UserLogin,
 			RawData: msg.User{
 				NickName: "TOO",
@@ -31,10 +33,10 @@ func main() {
 		})
 		time.Sleep(time.Second * 3)
 		fmt.Println("try get user list")
-		newClient.SendMessage(&common.Message{
+		cli.SendMessage(&common.Message{
 			Code:    enum.GetOnlineUserList,
 			RawData: nil,
 		})
 	}()
-	newClient.Start()
+	cli.Start()
 }
