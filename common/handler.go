@@ -7,32 +7,40 @@ import (
 	"time"
 )
 
+type Env interface {
+	AddHandler(code MessageCode, handler Handler)
+	RemoveHandler(code MessageCode)
+}
+
 type Handler interface {
-	Do(ctx Context, message json.RawMessage) error
+	Do(ctx Context, message *RawMessage) error
 	OnActive(ctx Context)
 	OnClose(ctx Context)
-	OnInit()
+	OnInit(env Env)
+	OnRemove(env Env)
 }
 
 type BaseHandler struct {
 }
 
-func (h *BaseHandler) Do(ctx Context, message json.RawMessage) {}
+func (h *BaseHandler) Do(_ Context, _ *RawMessage) error { return nil }
 
-func (h *BaseHandler) OnActive(ctx Context) {}
+func (h *BaseHandler) OnActive(_ Context) {}
 
-func (h *BaseHandler) OnClose(ctx Context) {}
+func (h *BaseHandler) OnClose(_ Context) {}
 
-func (h *BaseHandler) OnInit() {}
+func (h *BaseHandler) OnInit(_ Env) {}
+
+func (h *BaseHandler) OnRemove(_ Env) {}
 
 type echoHandler struct {
 	BaseHandler
 	display func(msg string) error
 }
 
-func (h *echoHandler) Do(ctx Context, message json.RawMessage) error {
+func (h *echoHandler) Do(_ Context, message *RawMessage) error {
 	msg := ""
-	if err := json.Unmarshal(message, &msg); err != nil {
+	if err := json.Unmarshal(message.RawData, &msg); err != nil {
 		return err
 	}
 	return h.display(msg)
@@ -55,7 +63,7 @@ func NewPingHandler(pongCode MessageCode) *pingHandler {
 	return &pingHandler{code: pongCode}
 }
 
-func (h *pingHandler) Do(ctx Context, _ json.RawMessage) error {
+func (h *pingHandler) Do(ctx Context, _ *RawMessage) error {
 	log.Println("[pong]")
 	return ctx.Write(&Message{
 		Code:    h.code,
@@ -67,6 +75,7 @@ type pongHandler struct {
 	connMap *sync.Map
 	code    MessageCode
 	*time.Ticker
+	isRemoved bool
 }
 
 type connState struct {
@@ -81,7 +90,7 @@ func NewPongHandler(pingCode MessageCode) *pongHandler {
 	}
 }
 
-func (h *pongHandler) Do(ctx Context, _ json.RawMessage) error {
+func (h *pongHandler) Do(ctx Context, _ *RawMessage) error {
 	conn, ok := h.connMap.Load(ctx.RemoteAddr())
 	if !ok {
 		return nil
@@ -101,14 +110,22 @@ func (h *pongHandler) OnClose(ctx Context) {
 	h.connMap.Delete(ctx.RemoteAddr())
 }
 
-func (h *pongHandler) OnInit() {
+func (h *pongHandler) OnInit(_ Env) {
 	go h.ping()
+}
+
+func (h *pongHandler) OnRemove(_ Env) {
+	h.isRemoved = true
 }
 
 func (h *pongHandler) ping() {
 	ticker := time.NewTicker(time.Second * 15)
+	defer ticker.Stop()
 	h.Ticker = ticker
 	for {
+		if h.isRemoved {
+			break
+		}
 		<-ticker.C
 		h.connMap.Range(func(key, value interface{}) bool {
 			state := value.(*connState)

@@ -27,6 +27,45 @@ func (o *OnlineUser) Addr() string {
 	return o.addr
 }
 
+// UserHandler 把用户行为聚合到一个Handler里管理
+type UserHandler struct {
+	onlineUserMap *sync.Map
+	handlerMap    map[common.MessageCode]common.Handler
+}
+
+func NewUserHandler() *UserHandler {
+	return &UserHandler{}
+}
+
+func (h *UserHandler) Do(ctx common.Context, rawMessage *common.RawMessage) error {
+	// dispatcher
+	return h.handlerMap[rawMessage.Code].Do(ctx, rawMessage)
+}
+
+func (h *UserHandler) OnActive(ctx common.Context) {
+	for _, handler := range h.handlerMap {
+		handler.OnActive(ctx)
+	}
+}
+
+func (h *UserHandler) OnClose(ctx common.Context) {
+	for _, handler := range h.handlerMap {
+		handler.OnClose(ctx)
+	}
+}
+
+func (h *UserHandler) OnInit(env common.Env) {
+	for _, handler := range h.handlerMap {
+		handler.OnInit(env)
+	}
+}
+
+func (h *UserHandler) OnRemove(env common.Env) {
+	for _, handler := range h.handlerMap {
+		handler.OnInit(env)
+	}
+}
+
 var (
 	loginHandler     *LoginHandler
 	onceLoginHandler = sync.Once{}
@@ -46,9 +85,9 @@ func NewLoginHandler() *LoginHandler {
 	return loginHandler
 }
 
-func (h *LoginHandler) Do(ctx common.Context, rawMessage json.RawMessage) error {
+func (h *LoginHandler) Do(ctx common.Context, rawMessage *common.RawMessage) error {
 	message := &msg.LoginMsg{}
-	err := json.Unmarshal(rawMessage, message)
+	err := json.Unmarshal(rawMessage.RawData, message)
 	if err != nil {
 		log.Println(err)
 		h.removeOnlineUser(ctx.RemoteAddr())
@@ -76,6 +115,13 @@ func (h *LoginHandler) Do(ctx common.Context, rawMessage json.RawMessage) error 
 	}
 	go h.broadcastMessage(user, user.NickName+"上线了")
 	return nil
+}
+
+func (h *LoginHandler) OnActive(ctx common.Context) {
+	_ = ctx.Write(&common.Message{
+		Code:    enum.Echo,
+		RawData: "hello, please login in to chat server",
+	})
 }
 
 func (h *LoginHandler) OnClose(ctx common.Context) {
@@ -142,7 +188,7 @@ func NewOnlineUserListHandler() *onlineUserListHandler {
 	return &onlineUserListHandler{}
 }
 
-func (h *onlineUserListHandler) Do(ctx common.Context, _ json.RawMessage) error {
+func (h *onlineUserListHandler) Do(ctx common.Context, _ *common.RawMessage) error {
 	users := GetOnlineUsers(1000)
 	builder := &strings.Builder{}
 	builder.WriteString(fmt.Sprintf("online user number: %d\n", len(users)))

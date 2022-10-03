@@ -1,7 +1,6 @@
 package chatserver
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"gochat/common"
@@ -12,6 +11,7 @@ import (
 type ServerContext struct {
 	remoteAddr string
 	localAddr  string
+	env        common.Env
 	common.Channel
 	isClosed bool
 }
@@ -22,6 +22,14 @@ func (s *ServerContext) RemoteAddr() string {
 
 func (s *ServerContext) LocalAddr() string {
 	return s.localAddr
+}
+
+func (s *ServerContext) AddHandler(code common.MessageCode, handler common.Handler) {
+	s.env.AddHandler(code, handler)
+}
+
+func (s *ServerContext) RemoveHandler(code common.MessageCode) {
+	s.env.RemoveHandler(code)
 }
 
 func (s *ServerContext) Close() error {
@@ -43,6 +51,8 @@ type ChannelWrapper struct {
 	common.Channel
 	*ServerContext
 	*Server
+	once sync.Once
+	err  error
 }
 
 func (c *ChannelWrapper) Write(msg *common.Message) error {
@@ -51,7 +61,10 @@ func (c *ChannelWrapper) Write(msg *common.Message) error {
 }
 
 func (c *ChannelWrapper) Close() error {
-	return c.Channel.Close()
+	c.once.Do(func() {
+		c.err = c.Channel.Close()
+	})
+	return c.err
 }
 
 func (c *ChannelWrapper) Read() (*common.RawMessage, error) {
@@ -119,7 +132,7 @@ func NewServer(address string) (*Server, error) {
 		lock:         sync.Mutex{},
 		handlerMap:   make(map[common.MessageCode]common.Handler),
 		interceptors: nil,
-		logger:       &common.ConsoleLogger{},
+		logger:       common.NewConsoleLogger(common.Debug),
 	}, nil
 }
 
@@ -131,7 +144,18 @@ func (s *Server) AddHandler(code common.MessageCode, handler common.Handler) {
 		s.logger.Fatal("duplicate handler")
 	}
 	s.handlerMap[code] = handler
-	handler.OnInit()
+	handler.OnInit(s)
+}
+
+func (s *Server) RemoveHandler(code common.MessageCode) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	handler, ok := s.handlerMap[code]
+	if ok {
+		s.logger.Info(fmt.Sprintf("remove handler code=%d", code))
+	}
+	delete(s.handlerMap, code)
+	handler.OnRemove(s)
 }
 
 func (s *Server) AddInterceptor(i Interceptor) {
@@ -187,6 +211,7 @@ func (s *Server) handleConn(conn net.Conn) {
 	ctx = &ServerContext{
 		remoteAddr: conn.RemoteAddr().String(),
 		localAddr:  conn.LocalAddr().String(),
+		env:        s,
 	}
 	ch := &ChannelWrapper{
 		Channel:       common.NewSimpleChannel(codec, conn),
@@ -202,16 +227,16 @@ func (s *Server) handleConn(conn net.Conn) {
 	for {
 		message, err := ctx.Read()
 		if err != nil {
-			s.logger.Info(err)
+			s.logger.Error(err)
 			break
 		}
 		handler, ok := s.handlerMap[message.Code]
 		if !ok {
-			s.logger.Info(fmt.Sprintf("not have matchable handler, remote address=%s",
-				ctx.RemoteAddr()))
+			s.logger.Info(fmt.Sprintf("not have matchable handler, remote address=%s, code=%d",
+				ctx.RemoteAddr(), message.Code))
 			break
 		}
-		if err = SafelyDo(handler, ctx, message.RawData); err != nil {
+		if err = SafelyDo(handler, ctx, message); err != nil {
 			s.logger.Error(err)
 		}
 		if ctx.isClosed {
@@ -220,7 +245,7 @@ func (s *Server) handleConn(conn net.Conn) {
 	}
 }
 
-func SafelyDo(handler common.Handler, ctx common.Context, message json.RawMessage) (err error) {
+func SafelyDo(handler common.Handler, ctx common.Context, message *common.RawMessage) (err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = errors.New(fmt.Sprintf("[panic], err=%s, remote address=%s", err, ctx.RemoteAddr()))

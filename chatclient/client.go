@@ -11,6 +11,7 @@ import (
 type ClientContext struct {
 	remoteAddr string
 	localAddr  string
+	client     *Client
 	common.Channel
 }
 
@@ -20,6 +21,14 @@ func (s *ClientContext) RemoteAddr() string {
 
 func (s *ClientContext) LocalAddr() string {
 	return s.localAddr
+}
+
+func (s *ClientContext) AddHandler(code common.MessageCode, handler common.Handler) {
+	s.client.AddHandler(code, handler)
+}
+
+func (s *ClientContext) RemoveHandler(code common.MessageCode) {
+	s.client.RemoveHandler(code)
 }
 
 type Client struct {
@@ -41,7 +50,7 @@ func NewClient(address string) (*Client, error) {
 		conn:         conn,
 		handlerMap:   make(map[common.MessageCode]common.Handler),
 		codec:        common.NewJsonCodec(conn),
-		logger:       &common.ConsoleLogger{},
+		logger:       common.NewConsoleLogger(common.Debug),
 		messageQueue: make(chan *common.Message),
 	}
 	header := common.NewHeader(common.JsonCodecType)
@@ -55,7 +64,7 @@ func NewClient(address string) (*Client, error) {
 
 func (c *Client) AddHandler(code common.MessageCode, handler common.Handler) {
 	c.handlerMap[code] = handler
-	handler.OnInit()
+	handler.OnInit(c)
 }
 
 func (c *Client) Close() error {
@@ -74,6 +83,15 @@ func (c *Client) write(msg *common.Message) error {
 
 func (c *Client) SetCloseFlag() {
 	c.isClosed = true
+}
+
+func (c *Client) RemoveHandler(code common.MessageCode) {
+	handler, ok := c.handlerMap[code]
+	if ok {
+		c.logger.Info(fmt.Sprintf("remove handler code=%d", code))
+	}
+	delete(c.handlerMap, code)
+	handler.OnRemove(c)
 }
 
 func (c *Client) Start() {
@@ -111,7 +129,7 @@ func (c *Client) Start() {
 			log.Println("unknown message", message)
 			continue
 		}
-		if err := handler.Do(ctx, message.RawData); err != nil {
+		if err := handler.Do(ctx, message); err != nil {
 			log.Println(err)
 			continue
 		}
