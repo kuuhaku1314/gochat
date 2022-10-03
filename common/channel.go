@@ -9,12 +9,12 @@ type Channel interface {
 }
 
 type SimpleChannelImpl struct {
-	coder Codec
+	codec Codec
 	conn  net.Conn
 }
 
 func (c *SimpleChannelImpl) Write(msg *Message) error {
-	return c.coder.Encode(msg)
+	return c.codec.Encode(msg)
 }
 
 func (c *SimpleChannelImpl) Close() error {
@@ -23,12 +23,12 @@ func (c *SimpleChannelImpl) Close() error {
 
 func (c *SimpleChannelImpl) Read() (*RawMessage, error) {
 	message := &RawMessage{}
-	return message, c.coder.Decode(message)
+	return message, c.codec.Decode(message)
 }
 
 func NewSimpleChannel(codec Codec, conn net.Conn) *SimpleChannelImpl {
 	return &SimpleChannelImpl{
-		coder: codec,
+		codec: codec,
 		conn:  conn,
 	}
 }
