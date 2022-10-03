@@ -13,7 +13,7 @@ type Env interface {
 }
 
 type Handler interface {
-	Do(ctx Context, message *RawMessage) error
+	OnMessage(ctx Context, message *RawMessage) error
 	OnActive(ctx Context)
 	OnClose(ctx Context)
 	OnInit(env Env)
@@ -23,7 +23,7 @@ type Handler interface {
 type BaseHandler struct {
 }
 
-func (h *BaseHandler) Do(_ Context, _ *RawMessage) error { return nil }
+func (h *BaseHandler) OnMessage(_ Context, _ *RawMessage) error { return nil }
 
 func (h *BaseHandler) OnActive(_ Context) {}
 
@@ -38,7 +38,7 @@ type displayHandler struct {
 	display func(msg string) error
 }
 
-func (h *displayHandler) Do(_ Context, message *RawMessage) error {
+func (h *displayHandler) OnMessage(_ Context, message *RawMessage) error {
 	msg := ""
 	if err := json.Unmarshal(message.RawData, &msg); err != nil {
 		return err
@@ -63,7 +63,7 @@ func NewPingHandler(pongCode MessageCode) *pingHandler {
 	return &pingHandler{code: pongCode}
 }
 
-func (h *pingHandler) Do(ctx Context, _ *RawMessage) error {
+func (h *pingHandler) OnMessage(ctx Context, _ *RawMessage) error {
 	log.Println("[pong]")
 	return ctx.Write(&Message{
 		Code:    h.code,
@@ -94,7 +94,7 @@ func NewPongHandler(pingCode MessageCode, timeInterval, maxNoReplyTime time.Dura
 	}
 }
 
-func (h *pongHandler) Do(ctx Context, _ *RawMessage) error {
+func (h *pongHandler) OnMessage(ctx Context, _ *RawMessage) error {
 	conn, ok := h.connMap.Load(ctx.RemoteAddr())
 	if !ok {
 		return nil

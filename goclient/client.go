@@ -128,7 +128,7 @@ func (c *Client) Start() {
 			log.Println("unknown message", message)
 			continue
 		}
-		if err := handler.Do(ctx, message); err != nil {
+		if err := handler.OnMessage(ctx, message); err != nil {
 			log.Println(err)
 			continue
 		}

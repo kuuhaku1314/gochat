@@ -251,5 +251,5 @@ func SafelyDo(handler common.Handler, ctx common.Context, message *common.RawMes
 			err = errors.New(fmt.Sprintf("[panic], err=%s, remote address=%s", err, ctx.RemoteAddr()))
 		}
 	}()
-	return handler.Do(ctx, message)
+	return handler.OnMessage(ctx, message)
 }

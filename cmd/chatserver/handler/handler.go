@@ -37,9 +37,9 @@ func NewUserHandler() *UserHandler {
 	return &UserHandler{}
 }
 
-func (h *UserHandler) Do(ctx common.Context, rawMessage *common.RawMessage) error {
+func (h *UserHandler) OnMessage(ctx common.Context, rawMessage *common.RawMessage) error {
 	// dispatcher
-	return h.handlerMap[rawMessage.Code].Do(ctx, rawMessage)
+	return h.handlerMap[rawMessage.Code].OnMessage(ctx, rawMessage)
 }
 
 func (h *UserHandler) OnActive(ctx common.Context) {
@@ -85,7 +85,7 @@ func NewLoginHandler() *LoginHandler {
 	return loginHandler
 }
 
-func (h *LoginHandler) Do(ctx common.Context, rawMessage *common.RawMessage) error {
+func (h *LoginHandler) OnMessage(ctx common.Context, rawMessage *common.RawMessage) error {
 	message := &msg.LoginMsg{}
 	err := json.Unmarshal(rawMessage.RawData, message)
 	if err != nil {
@@ -188,7 +188,7 @@ func NewOnlineUserListHandler() *onlineUserListHandler {
 	return &onlineUserListHandler{}
 }
 
-func (h *onlineUserListHandler) Do(ctx common.Context, _ *common.RawMessage) error {
+func (h *onlineUserListHandler) OnMessage(ctx common.Context, _ *common.RawMessage) error {
 	users := GetOnlineUsers(1000)
 	builder := &strings.Builder{}
 	builder.WriteString(fmt.Sprintf("online user number: %d\n", len(users)))
