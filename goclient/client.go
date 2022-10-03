@@ -95,6 +95,14 @@ func (c *Client) RemoveHandler(code common.MessageCode) {
 }
 
 func (c *Client) Start() {
+	ctx := &ClientContext{
+		remoteAddr: c.conn.RemoteAddr().String(),
+		localAddr:  c.conn.LocalAddr().String(),
+		Channel:    common.NewSimpleChannel(c.codec, c.conn),
+	}
+	for _, handler := range c.handlerMap {
+		handler.OnActive(ctx)
+	}
 	go func() {
 		for {
 			if c.isClosed {
@@ -104,20 +112,12 @@ func (c *Client) Start() {
 			if msg == nil {
 				continue
 			}
-			err := c.write(msg)
+			err := ctx.Write(msg)
 			if err != nil {
 				log.Println(err)
 			}
 		}
 	}()
-	ctx := &ClientContext{
-		remoteAddr: c.conn.RemoteAddr().String(),
-		localAddr:  c.conn.LocalAddr().String(),
-		Channel:    common.NewSimpleChannel(c.codec, c.conn),
-	}
-	for _, handler := range c.handlerMap {
-		handler.OnActive(ctx)
-	}
 	for {
 		if c.isClosed {
 			break
