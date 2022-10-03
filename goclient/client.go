@@ -97,6 +97,9 @@ func (c *Client) RemoveHandler(code common.MessageCode) {
 func (c *Client) Start() {
 	go func() {
 		for {
+			if c.isClosed {
+				return
+			}
 			msg := <-c.messageQueue
 			if msg == nil {
 				continue
