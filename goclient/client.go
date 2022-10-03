@@ -77,10 +77,6 @@ func (c *Client) Close() error {
 	return err
 }
 
-func (c *Client) write(msg *common.Message) error {
-	return c.codec.Encode(msg)
-}
-
 func (c *Client) SetCloseFlag() {
 	c.isClosed = true
 }
