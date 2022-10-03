@@ -75,7 +75,9 @@ type pongHandler struct {
 	connMap *sync.Map
 	code    MessageCode
 	*time.Ticker
-	isRemoved bool
+	timeInterval   time.Duration
+	maxNoReplyTime time.Duration
+	isRemoved      bool
 }
 
 type connState struct {
@@ -83,10 +85,12 @@ type connState struct {
 	lastPongTime time.Time
 }
 
-func NewPongHandler(pingCode MessageCode) *pongHandler {
+func NewPongHandler(pingCode MessageCode, timeInterval, maxNoReplyTime time.Duration) *pongHandler {
 	return &pongHandler{
-		connMap: &sync.Map{},
-		code:    pingCode,
+		connMap:        &sync.Map{},
+		code:           pingCode,
+		timeInterval:   timeInterval,
+		maxNoReplyTime: maxNoReplyTime,
 	}
 }
 
@@ -119,7 +123,7 @@ func (h *pongHandler) OnRemove(_ Env) {
 }
 
 func (h *pongHandler) ping() {
-	ticker := time.NewTicker(time.Second * 15)
+	ticker := time.NewTicker(h.timeInterval)
 	defer ticker.Stop()
 	h.Ticker = ticker
 	for {
@@ -129,8 +133,9 @@ func (h *pongHandler) ping() {
 		<-ticker.C
 		h.connMap.Range(func(key, value interface{}) bool {
 			state := value.(*connState)
-			if time.Now().Sub(state.lastPongTime).Seconds() > 60 {
+			if time.Now().Sub(state.lastPongTime) > h.maxNoReplyTime {
 				h.connMap.Delete(key)
+				_ = state.Close()
 				log.Println("lose connect " + state.RemoteAddr())
 				return true
 			}

@@ -7,6 +7,7 @@ import (
 	"gochat/common"
 	"gochat/common/message/enum"
 	"gochat/goserver"
+	"time"
 )
 
 func main() {
@@ -21,7 +22,7 @@ func main() {
 			fmt.Println(msg)
 			return nil
 		}))
-	s.AddHandler(enum.Pong, common.NewPongHandler(enum.Ping))
+	s.AddHandler(enum.Pong, common.NewPongHandler(enum.Ping, time.Second*15, time.Minute))
 	s.AddHandler(enum.UserLogin, handler.NewLoginHandler())
 	s.AddHandler(enum.GetOnlineUserList, handler.NewOnlineUserListHandler())
 	s.Serve()
