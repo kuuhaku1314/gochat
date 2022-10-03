@@ -1,7 +1,6 @@
 package chatserver
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"gochat/common"
@@ -102,7 +101,7 @@ type Server struct {
 	listener     net.Listener
 	clientPool   *sync.Map
 	lock         sync.Mutex
-	handlerMap   map[common.MessageCode]func(ctx common.Context, message json.RawMessage) error
+	handlerMap   map[common.MessageCode]common.Handler
 	interceptors []Interceptor
 	logger       common.Logger
 }
@@ -117,13 +116,13 @@ func NewServer(address string) (*Server, error) {
 		listener:     listener,
 		clientPool:   &sync.Map{},
 		lock:         sync.Mutex{},
-		handlerMap:   map[common.MessageCode]func(ctx common.Context, message json.RawMessage) error{},
+		handlerMap:   make(map[common.MessageCode]common.Handler),
 		interceptors: nil,
 		logger:       &common.ConsoleLogger{},
 	}, nil
 }
 
-func (s *Server) AddHandler(code common.MessageCode, handler func(ctx common.Context, message json.RawMessage) error) {
+func (s *Server) AddHandler(code common.MessageCode, handler common.Handler) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	_, ok := s.handlerMap[code]
@@ -191,7 +190,7 @@ func (s *Server) handleConn(conn net.Conn) {
 				conn.RemoteAddr().String()))
 			return
 		}
-		if err = handler(ctx, message.RawData); err != nil {
+		if err = handler.Do(ctx, message.RawData); err != nil {
 			s.logger.Error(err)
 		}
 		if ctx.isClosed {

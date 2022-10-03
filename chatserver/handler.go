@@ -12,14 +12,10 @@ import (
 	"time"
 )
 
-var (
-	onlineUserMap = &sync.Map{}
-)
-
 type OnlineUser struct {
 	ctx common.Context
 	*msg.User
-	addr string
+	addr     string
 	isOnline bool
 }
 
@@ -31,12 +27,30 @@ func (o *OnlineUser) Addr() string {
 	return o.addr
 }
 
-func LoginHandler(ctx common.Context, rawMessage json.RawMessage) error {
+var (
+	loginHandler     *LoginHandler
+	onceLoginHandler = sync.Once{}
+)
+
+type LoginHandler struct {
+	onlineUserMap *sync.Map
+}
+
+func NewLoginHandler() *LoginHandler {
+	onceLoginHandler.Do(func() {
+		loginHandler = &LoginHandler{
+			onlineUserMap: &sync.Map{},
+		}
+	})
+	return loginHandler
+}
+
+func (h *LoginHandler) Do(ctx common.Context, rawMessage json.RawMessage) error {
 	message := &msg.LoginMsg{}
 	err := json.Unmarshal(rawMessage, message)
 	if err != nil {
 		log.Println(err)
-		removeOnlineUser(ctx.RemoteAddr())
+		h.removeOnlineUser(ctx.RemoteAddr())
 		_ = ctx.Close()
 		return err
 	}
@@ -48,7 +62,7 @@ func LoginHandler(ctx common.Context, rawMessage json.RawMessage) error {
 		addr:     ctx.RemoteAddr(),
 		isOnline: true,
 	}
-	addOnlineUser(user)
+	h.addOnlineUser(user)
 	loginMsg := fmt.Sprintf("login success, now %s, your address is %s", time.Now().String(), user.Addr())
 	err = ctx.Write(&common.Message{
 		Code:    enum.Echo,
@@ -56,34 +70,51 @@ func LoginHandler(ctx common.Context, rawMessage json.RawMessage) error {
 	})
 	if err != nil {
 		log.Println(err)
-		removeOnlineUser(user.Addr())
+		h.removeOnlineUser(user.Addr())
 		_ = ctx.Close()
 	}
-	go broadcastUserLoginEvent(user)
+	go h.broadcastUserLoginEvent(user)
 	return nil
 }
 
-func addOnlineUser(user *OnlineUser) {
-	onlineUserMap.Store(user.Addr(), user)
+func (h *LoginHandler) addOnlineUser(user *OnlineUser) {
+	h.onlineUserMap.Store(user.Addr(), user)
 }
 
-func removeOnlineUser(addr string) {
+func (h *LoginHandler) removeOnlineUser(addr string) {
 	user, ok := GetOnlineUser(addr)
 	if ok {
 		user.isOnline = false
-		onlineUserMap.Delete(addr)
+		h.onlineUserMap.Delete(addr)
+	}
+}
+
+func (h *LoginHandler) broadcastUserLoginEvent(user *OnlineUser) {
+	users := GetOnlineUsers(1000)
+	for i := range users {
+		if user.Addr() == users[i].Addr() {
+			continue
+		}
+		err := users[i].ctx.Write(&common.Message{
+			Code:    enum.Echo,
+			RawData: user.NickName + "上线了",
+		})
+		if err != nil {
+			h.removeOnlineUser(users[i].Addr())
+			_ = users[i].ctx.Close()
+		}
 	}
 }
 
 func GetOnlineUser(addr string) (*OnlineUser, bool) {
-	user, ok := onlineUserMap.Load(addr)
+	user, ok := loginHandler.onlineUserMap.Load(addr)
 	return user.(*OnlineUser), ok
 }
 
-func getOnlineUsers(num int) []*OnlineUser {
+func GetOnlineUsers(limit int) []*OnlineUser {
 	users := make([]*OnlineUser, 0)
-	onlineUserMap.Range(func(key, value interface{}) bool {
-		if len(users) > num {
+	loginHandler.onlineUserMap.Range(func(key, value interface{}) bool {
+		if len(users) > limit {
 			return false
 		}
 		user := value.(*OnlineUser)
@@ -93,8 +124,10 @@ func getOnlineUsers(num int) []*OnlineUser {
 	return users
 }
 
-func OnlineUserListHandler(ctx common.Context, _ json.RawMessage) error {
-	users := getOnlineUsers(1000)
+type OnlineUserListHandler struct{}
+
+func (h *OnlineUserListHandler) Do(ctx common.Context, _ json.RawMessage) error {
+	users := GetOnlineUsers(1000)
 	builder := &strings.Builder{}
 	builder.WriteString(fmt.Sprintf("online user number: %d\n", len(users)))
 	for i := range users {
@@ -109,18 +142,4 @@ func OnlineUserListHandler(ctx common.Context, _ json.RawMessage) error {
 		return err
 	}
 	return nil
-}
-
-func broadcastUserLoginEvent(user *OnlineUser) {
-	users := getOnlineUsers(1000)
-	for i := range users {
-		err := users[i].ctx.Write(&common.Message{
-			Code:    enum.Echo,
-			RawData: user.NickName + "上线了",
-		})
-		if err != nil {
-			removeOnlineUser(users[i].Addr())
-			_ = users[i].ctx.Close()
-		}
-	}
 }

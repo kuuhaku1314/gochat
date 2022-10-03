@@ -13,11 +13,12 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	s.AddHandler(enum.Echo, common.NewEchoHandler(func(msg string) error {
-		fmt.Println(msg)
-		return nil
-	}))
-	s.AddHandler(enum.UserLogin, chatserver.LoginHandler)
-	s.AddHandler(enum.GetOnlineUserList, chatserver.OnlineUserListHandler)
+	s.AddHandler(enum.Echo, common.NewEchoHandler(
+		func(msg string) error {
+			fmt.Println(msg)
+			return nil
+		}))
+	s.AddHandler(enum.UserLogin, chatserver.NewLoginHandler())
+	s.AddHandler(enum.GetOnlineUserList, &chatserver.OnlineUserListHandler{})
 	s.Serve()
 }

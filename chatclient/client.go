@@ -1,7 +1,6 @@
 package chatclient
 
 import (
-	"encoding/json"
 	"fmt"
 	"gochat/common"
 	"log"
@@ -24,12 +23,13 @@ func (s *ClientContext) LocalAddr() string {
 }
 
 type Client struct {
-	conn       net.Conn
-	handlerMap map[common.MessageCode]func(ctx common.Context, message json.RawMessage) error
-	codec      common.Codec
-	logger     common.Logger
-	isClosed   bool
-	once sync.Once
+	conn         net.Conn
+	handlerMap   map[common.MessageCode]common.Handler
+	codec        common.Codec
+	logger       common.Logger
+	isClosed     bool
+	once         sync.Once
+	messageQueue chan *common.Message
 }
 
 func NewClient(address string) (*Client, error) {
@@ -38,10 +38,11 @@ func NewClient(address string) (*Client, error) {
 		return nil, err
 	}
 	client := &Client{
-		conn:       conn,
-		handlerMap: make(map[common.MessageCode]func(ctx common.Context, message json.RawMessage) error),
-		codec:      common.NewJsonCodec(conn),
-		logger:     &common.ConsoleLogger{},
+		conn:         conn,
+		handlerMap:   make(map[common.MessageCode]common.Handler),
+		codec:        common.NewJsonCodec(conn),
+		logger:       &common.ConsoleLogger{},
+		messageQueue: make(chan *common.Message),
 	}
 	header := common.NewHeader(common.JsonCodecType)
 	_, err = client.conn.Write(header.Bytes())
@@ -52,12 +53,8 @@ func NewClient(address string) (*Client, error) {
 	return client, nil
 }
 
-func (c *Client) AddHandler(code common.MessageCode, handler func(ctx common.Context, message json.RawMessage) error) {
+func (c *Client) AddHandler(code common.MessageCode, handler common.Handler) {
 	c.handlerMap[code] = handler
-}
-
-func (c *Client) Write(msg *common.Message) error {
-	return c.codec.Encode(msg)
 }
 
 func (c *Client) Close() error {
@@ -65,8 +62,13 @@ func (c *Client) Close() error {
 	var err error
 	c.once.Do(func() {
 		err = c.conn.Close()
+		close(c.messageQueue)
 	})
 	return err
+}
+
+func (c *Client) write(msg *common.Message) error {
+	return c.codec.Encode(msg)
 }
 
 func (c *Client) SetCloseFlag() {
@@ -74,6 +76,18 @@ func (c *Client) SetCloseFlag() {
 }
 
 func (c *Client) Start() {
+	go func() {
+		for {
+			msg := <-c.messageQueue
+			if msg == nil {
+				continue
+			}
+			err := c.write(msg)
+			if err != nil {
+				log.Println(err)
+			}
+		}
+	}()
 	for {
 		if c.isClosed {
 			break
@@ -93,10 +107,14 @@ func (c *Client) Start() {
 			localAddr:  c.conn.LocalAddr().String(),
 			Channel:    common.NewSimpleChannel(c.codec, c.conn),
 		}
-		if err := handler(ctx, message.RawData); err != nil {
+		if err := handler.Do(ctx, message.RawData); err != nil {
 			log.Println(err)
 			continue
 		}
 	}
 	_ = c.Close()
+}
+
+func (c *Client) SendMessage(message *common.Message) {
+	c.messageQueue <- message
 }

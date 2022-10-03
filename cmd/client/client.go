@@ -15,32 +15,26 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	newClient.AddHandler(enum.Echo, common.NewEchoHandler(func(msg string) error {
-		fmt.Println(msg)
-		return nil
-	}))
+	newClient.AddHandler(enum.Echo, common.NewEchoHandler(
+		func(msg string) error {
+			fmt.Println(msg)
+			return nil
+		}))
 	go func() {
-		time.Sleep(time.Second*2)
+		time.Sleep(time.Second * 3)
 		fmt.Println("try login")
-		err := newClient.Write(&common.Message{
-			Code:    enum.UserLogin,
+		newClient.SendMessage(&common.Message{
+			Code: enum.UserLogin,
 			RawData: msg.User{
 				NickName: "TOO",
 			},
 		})
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
+		time.Sleep(time.Second * 3)
 		fmt.Println("try get user list")
-		err = newClient.Write(&common.Message{
+		newClient.SendMessage(&common.Message{
 			Code:    enum.GetOnlineUserList,
 			RawData: nil,
 		})
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
 	}()
 	newClient.Start()
 }
