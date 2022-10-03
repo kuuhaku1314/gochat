@@ -32,24 +32,24 @@ func (log *ConsoleLogger) Debug(msg ...interface{}) {
 	if log.level > Debug {
 		return
 	}
-	fmt.Println(msg...)
+	fmt.Println(msg)
 }
 
 func (log *ConsoleLogger) Info(msg ...interface{}) {
 	if log.level > Info {
 		return
 	}
-	fmt.Println(msg...)
+	fmt.Println(msg)
 }
 
 func (log *ConsoleLogger) Error(msg ...interface{}) {
 	if log.level > Error {
 		return
 	}
-	println(msg...)
+	println(msg)
 }
 
 func (log *ConsoleLogger) Fatal(msg ...interface{}) {
-	println(msg...)
+	println(msg)
 	os.Exit(-1)
 }
