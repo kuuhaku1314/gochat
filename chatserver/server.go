@@ -161,6 +161,10 @@ func (s *Server) handleConn(conn net.Conn) {
 		}
 		if ctx != nil {
 			_ = ctx.Close()
+			s.clientPool.Delete(ctx.RemoteAddr())
+			for _, handler := range s.handlerMap {
+				handler.OnClose(ctx)
+			}
 		} else {
 			_ = conn.Close()
 		}
@@ -213,10 +217,6 @@ func (s *Server) handleConn(conn net.Conn) {
 		if ctx.isClosed {
 			break
 		}
-	}
-	s.clientPool.Delete(ctx.RemoteAddr())
-	for _, handler := range s.handlerMap {
-		handler.OnClose(ctx)
 	}
 }
 
