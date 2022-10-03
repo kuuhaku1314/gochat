@@ -122,9 +122,9 @@ func (c *Client) Start() {
 		if c.isClosed {
 			break
 		}
-		message := &common.RawMessage{}
-		if err := c.codec.Decode(message); err != nil {
-			log.Println(err)
+		message, err := ctx.Read()
+		if err != nil {
+			c.logger.Error(err)
 			break
 		}
 		handler, ok := c.handlerMap[message.Code]
