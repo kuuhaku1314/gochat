@@ -1,6 +1,7 @@
 package chatserver
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"gochat/common"
@@ -153,11 +154,16 @@ func (s *Server) Serve() {
 }
 
 func (s *Server) handleConn(conn net.Conn) {
+	var ctx *ServerContext
 	defer func() {
 		if err := recover(); err != nil {
 			s.logger.Error(fmt.Sprintf("[panic], err=%s, remote address=%s", err, conn.RemoteAddr()))
 		}
-		_ = conn.Close()
+		if ctx != nil {
+			_ = ctx.Close()
+		} else {
+			_ = conn.Close()
+		}
 	}()
 	header, err := common.ReadHeader(conn)
 	if err != nil {
@@ -174,8 +180,7 @@ func (s *Server) handleConn(conn net.Conn) {
 		return
 	}
 	s.logger.Info(fmt.Sprintf("connecting completed, remote address=%s", conn.RemoteAddr()))
-	s.clientPool.Store(conn.RemoteAddr(), conn)
-	ctx := &ServerContext{
+	ctx = &ServerContext{
 		remoteAddr: conn.RemoteAddr().String(),
 		localAddr:  conn.LocalAddr().String(),
 	}
@@ -185,6 +190,8 @@ func (s *Server) handleConn(conn net.Conn) {
 		Server:        s,
 	}
 	ctx.Channel = ch
+
+	s.clientPool.Store(ctx.RemoteAddr(), ctx)
 	for _, handler := range s.handlerMap {
 		handler.OnActive(ctx)
 	}
@@ -197,18 +204,27 @@ func (s *Server) handleConn(conn net.Conn) {
 		handler, ok := s.handlerMap[message.Code]
 		if !ok {
 			s.logger.Info(fmt.Sprintf("not have matchable handler, remote address=%s",
-				conn.RemoteAddr().String()))
+				ctx.RemoteAddr()))
 			break
 		}
-		if err = handler.Do(ctx, message.RawData); err != nil {
+		if err = SafelyDo(handler, ctx, message.RawData); err != nil {
 			s.logger.Error(err)
 		}
 		if ctx.isClosed {
 			break
 		}
 	}
-	s.clientPool.Delete(conn.RemoteAddr())
+	s.clientPool.Delete(ctx.RemoteAddr())
 	for _, handler := range s.handlerMap {
 		handler.OnClose(ctx)
 	}
+}
+
+func SafelyDo(handler common.Handler, ctx common.Context, message json.RawMessage) (err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = errors.New(fmt.Sprintf("[panic], err=%s, remote address=%s", err, ctx.RemoteAddr()))
+		}
+	}()
+	return handler.Do(ctx, message)
 }
