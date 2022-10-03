@@ -1,4 +1,4 @@
-package chatserver
+package interceptor
 
 import (
 	"gochat/common"

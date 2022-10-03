@@ -1,4 +1,4 @@
-package chatclient
+package goclient
 
 import (
 	"fmt"
@@ -58,7 +58,7 @@ func NewClient(address string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	client.logger.Info(fmt.Sprintf("start chatclient success, local address=%s", conn.LocalAddr().String()))
+	client.logger.Info(fmt.Sprintf("start goclient success, local address=%s", conn.LocalAddr().String()))
 	return client, nil
 }
 

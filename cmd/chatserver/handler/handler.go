@@ -1,4 +1,4 @@
-package chatserver
+package handler
 
 import (
 	"encoding/json"
@@ -105,7 +105,7 @@ func (h *LoginHandler) Do(ctx common.Context, rawMessage *common.RawMessage) err
 	h.addOnlineUser(user)
 	loginMsg := fmt.Sprintf("login success, now %s, your address is %s", time.Now().String(), user.Addr())
 	err = ctx.Write(&common.Message{
-		Code:    enum.Echo,
+		Code:    enum.Display,
 		RawData: loginMsg,
 	})
 	if err != nil {
@@ -119,8 +119,8 @@ func (h *LoginHandler) Do(ctx common.Context, rawMessage *common.RawMessage) err
 
 func (h *LoginHandler) OnActive(ctx common.Context) {
 	_ = ctx.Write(&common.Message{
-		Code:    enum.Echo,
-		RawData: "hello, please login in to chat server",
+		Code:    enum.Display,
+		RawData: "hello, please login in to chat chatserver",
 	})
 }
 
@@ -152,7 +152,7 @@ func (h *LoginHandler) broadcastMessage(user *OnlineUser, msg string) {
 			continue
 		}
 		err := users[i].ctx.Write(&common.Message{
-			Code:    enum.Echo,
+			Code:    enum.Display,
 			RawData: msg,
 		})
 		if err != nil {
@@ -196,7 +196,7 @@ func (h *onlineUserListHandler) Do(ctx common.Context, _ *common.RawMessage) err
 		builder.WriteString(fmt.Sprintf("address=%s, nickname=%s\n", users[i].Addr(), users[i].NickName))
 	}
 	err := ctx.Write(&common.Message{
-		Code:    enum.Echo,
+		Code:    enum.Display,
 		RawData: builder.String(),
 	})
 	if err != nil {

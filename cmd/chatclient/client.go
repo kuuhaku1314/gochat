@@ -2,21 +2,21 @@ package main
 
 import (
 	"fmt"
-	"gochat/chatclient"
 	"gochat/common"
 	"gochat/common/message/enum"
 	"gochat/common/message/msg"
+	"gochat/goclient"
 	"time"
 )
 
 func main() {
-	cli, err := chatclient.NewClient("localhost:8080")
+	cli, err := goclient.NewClient("localhost:8080")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	cli.AddHandler(enum.Ping, common.NewPingHandler(enum.Pong))
-	cli.AddHandler(enum.Echo, common.NewEchoHandler(
+	cli.AddHandler(enum.Display, common.NewDisplayHandler(
 		func(msg string) error {
 			fmt.Println(msg)
 			return nil
@@ -27,8 +27,8 @@ func main() {
 		fmt.Println("try login")
 		cli.SendMessage(&common.Message{
 			Code: enum.UserLogin,
-			RawData: msg.User{
-				NickName: "TOO",
+			RawData: msg.LoginMsg{
+				NickName: "kuuhaku1314",
 			},
 		})
 		time.Sleep(time.Second * 3)

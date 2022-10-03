@@ -33,12 +33,12 @@ func (h *BaseHandler) OnInit(_ Env) {}
 
 func (h *BaseHandler) OnRemove(_ Env) {}
 
-type echoHandler struct {
+type displayHandler struct {
 	BaseHandler
 	display func(msg string) error
 }
 
-func (h *echoHandler) Do(_ Context, message *RawMessage) error {
+func (h *displayHandler) Do(_ Context, message *RawMessage) error {
 	msg := ""
 	if err := json.Unmarshal(message.RawData, &msg); err != nil {
 		return err
@@ -46,11 +46,11 @@ func (h *echoHandler) Do(_ Context, message *RawMessage) error {
 	return h.display(msg)
 }
 
-func NewEchoHandler(display func(msg string) error) *echoHandler {
-	return &echoHandler{display: display}
+func NewDisplayHandler(display func(msg string) error) *displayHandler {
+	return &displayHandler{display: display}
 }
 
-func (h *echoHandler) ChangeDisplayFunc(display func(msg string) error) {
+func (h *displayHandler) ChangeDisplayFunc(display func(msg string) error) {
 	h.display = display
 }
 
