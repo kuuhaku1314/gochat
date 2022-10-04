@@ -21,17 +21,17 @@ var (
 )
 
 type fileTransferHandler struct {
-	sendFileEntity      *msg.FileTransformEntity
-	sendLock            *sync.Mutex
-	sendFile            *os.File
-	lastSendFileTime    int64
-	sendBuff            []byte
-	receiveFileEntity   *msg.FileTransformEntity
-	receiveLock         *sync.Mutex
-	receiveFile         *os.File
-	lastReceiveFileTime int64
-	fileStateMachine    map[int8]func(ctx common.Context, file *msg.FileTransformEntity) error
-	timeout             int64
+	sendFileEntity       *msg.FileTransformEntity
+	sendLock             *sync.Mutex
+	sendFile             *os.File
+	lastSendFileTime     int64
+	sendBuff             []byte
+	receiveFileEntity    *msg.FileTransformEntity
+	receiveLock          *sync.Mutex
+	receiveFile          *os.File
+	lastReceiveFileTime  int64
+	transferStateMachine map[int8]func(ctx common.Context, file *msg.FileTransformEntity) error
+	timeout              int64
 }
 
 func NewFileTransferHandler(timeout time.Duration) *fileTransferHandler {
@@ -42,7 +42,7 @@ func NewFileTransferHandler(timeout time.Duration) *fileTransferHandler {
 			receiveLock: &sync.Mutex{},
 			timeout:     int64(timeout.Seconds()),
 		}
-		fileTransfer.fileStateMachine = map[int8]func(ctx common.Context, file *msg.FileTransformEntity) error{
+		fileTransfer.transferStateMachine = map[int8]func(ctx common.Context, file *msg.FileTransformEntity) error{
 			msg.FileWaitingSend:   fileTransfer.FileStateWaitingSend,
 			msg.FileReject:        fileTransfer.FileStateReject,
 			msg.FileSending:       fileTransfer.FileStateSending,
@@ -249,7 +249,7 @@ func (h *fileTransferHandler) OnMessage(ctx common.Context, rawMessage *common.R
 	if err := json.Unmarshal(rawMessage.RawData, message); err != nil {
 		return err
 	}
-	f, ok := h.fileStateMachine[message.State]
+	f, ok := h.transferStateMachine[message.State]
 	if !ok {
 		log.Println("invalid state")
 		return nil
