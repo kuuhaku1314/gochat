@@ -125,7 +125,9 @@ func (c *Client) Start() {
 		}
 		message, err := ctx.Read()
 		if err != nil {
-			c.logger.Error(err)
+			if !c.isClosed {
+				c.logger.Error(err)
+			}
 			break
 		}
 		handler, ok := c.handlerMap[message.Code]
@@ -178,7 +180,7 @@ func (c *commandDispatcher) Dispatch() {
 		arr := strings.SplitN(str, " ", 2)
 		command, ok := c.commandMap[arr[0]]
 		if !ok {
-			c.client.logger.Error("command not found, please use [list] command to get command list")
+			c.client.logger.Error("command not found, you can use [list] command to get command list")
 			continue
 		}
 		params := ""
@@ -287,13 +289,17 @@ func (c *Client) NewCommandDispatcher(reader io.Reader) Dispatcher {
 		},
 		Tips: "show command tips, use likes help [command], example: help help",
 	}
-	err := dispatcher.Register(listCommand)
-	if err != nil {
-		panic(err)
+	exitCommand := &Command{
+		Command: "exit",
+		LocalParseFunc: func(params string) error {
+			log.Println("exit client success")
+			_ = c.Close()
+			return nil
+		},
+		Tips: "exit process",
 	}
-	err = dispatcher.Register(helpCommand)
-	if err != nil {
-		panic(err)
-	}
+	_ = dispatcher.Register(listCommand)
+	_ = dispatcher.Register(helpCommand)
+	_ = dispatcher.Register(exitCommand)
 	return dispatcher
 }

@@ -110,6 +110,7 @@ func (h *pongHandler) OnActive(ctx Context) {
 }
 
 func (h *pongHandler) OnClose(ctx Context) {
+	log.Println("remove inactive connect:" + ctx.RemoteAddr())
 	h.connMap.Delete(ctx.RemoteAddr())
 }
 
