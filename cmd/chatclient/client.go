@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"gochat/common"
 	"gochat/common/message/enum"
-	"gochat/common/message/msg"
 	"gochat/goclient"
-	"time"
+	"os"
 )
 
 func main() {
@@ -21,22 +20,11 @@ func main() {
 			fmt.Println(msg)
 			return nil
 		}))
-
-	go func() {
-		time.Sleep(time.Second * 3)
-		fmt.Println("try login")
-		cli.SendMessage(&common.Message{
-			Code: enum.UserLogin,
-			RawData: msg.LoginMsg{
-				NickName: "kuuhaku1314",
-			},
-		})
-		time.Sleep(time.Second * 3)
-		fmt.Println("try get user list")
-		cli.SendMessage(&common.Message{
-			Code:    enum.GetOnlineUserList,
-			RawData: nil,
-		})
-	}()
+	dispatcher := cli.NewCommandDispatcher(os.Stdin)
+	AssertNotError(dispatcher.Register(NewLoginCommand()))
+	AssertNotError(dispatcher.Register(NewLogoutCommand()))
+	AssertNotError(dispatcher.Register(NewGetUserListCommand()))
+	AssertNotError(dispatcher.Register(NewSendCommand()))
+	go dispatcher.Dispatch()
 	cli.Start()
 }

@@ -46,10 +46,10 @@ func (log *ConsoleLogger) Error(msg ...interface{}) {
 	if log.level > Error {
 		return
 	}
-	println(msg)
+	fmt.Println(msg)
 }
 
 func (log *ConsoleLogger) Fatal(msg ...interface{}) {
-	println(msg)
+	fmt.Println(msg)
 	os.Exit(-1)
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"gochat/common"
+	"gochat/common/message/enum"
 	"net"
 	"sync"
 )
@@ -138,12 +139,12 @@ func NewServer(address string) (*Server, error) {
 
 func (s *Server) AddHandler(code common.MessageCode, handler common.Handler) {
 	s.lock.Lock()
-	defer s.lock.Unlock()
 	_, ok := s.handlerMap[code]
 	if ok {
 		s.logger.Fatal("duplicate handler")
 	}
 	s.handlerMap[code] = handler
+	s.lock.Unlock()
 	handler.OnInit(s)
 }
 
@@ -252,4 +253,11 @@ func SafelyDo(handler common.Handler, ctx common.Context, message *common.RawMes
 		}
 	}()
 	return handler.OnMessage(ctx, message)
+}
+
+func NewDisplayMessage(err string) *common.Message {
+	return &common.Message{
+		Code:    enum.Display,
+		RawData: err,
+	}
 }

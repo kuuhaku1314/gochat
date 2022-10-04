@@ -64,7 +64,6 @@ func NewPingHandler(pongCode MessageCode) *pingHandler {
 }
 
 func (h *pingHandler) OnMessage(ctx Context, _ *RawMessage) error {
-	log.Println("[pong]")
 	return ctx.Write(&Message{
 		Code:    h.code,
 		RawData: "[pong]",

@@ -23,7 +23,6 @@ func main() {
 			return nil
 		}))
 	s.AddHandler(enum.Pong, common.NewPongHandler(enum.Ping, time.Second*15, time.Minute))
-	s.AddHandler(enum.UserLogin, handler.NewLoginHandler())
-	s.AddHandler(enum.GetOnlineUserList, handler.NewOnlineUserListHandler())
+	s.AddHandler(handler.UserHandlerCode, handler.GetUserHandler())
 	s.Serve()
 }

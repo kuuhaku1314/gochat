@@ -10,4 +10,5 @@ const (
 	GetRemoteRealIPInfo
 	Ping
 	Pong
+	SendMessage
 )
