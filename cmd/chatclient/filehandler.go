@@ -340,13 +340,13 @@ func (h *fileTransferHandler) NotifySendFile(localIP, remoteIP, filepath string)
 	return nil
 }
 
-func (h *fileTransferHandler) resetReceiveFile(haveError bool) {
+func (h *fileTransferHandler) resetReceiveFile(noneError bool) {
 	if h.receiveFile != nil {
 		name := h.receiveFile.Name()
 		if err := h.receiveFile.Close(); err != nil {
 			log.Println(err)
 		}
-		if !haveError {
+		if !noneError {
 			log.Printf("remove receive failed file:" + name)
 			if err := os.Remove(name); err != nil {
 				log.Println(err)
@@ -358,12 +358,12 @@ func (h *fileTransferHandler) resetReceiveFile(haveError bool) {
 	h.lastReceiveFileTime = 0
 }
 
-func (h *fileTransferHandler) resetSendFile(haveError bool) {
+func (h *fileTransferHandler) resetSendFile(noneError bool) {
 	if h.sendFile != nil {
 		if err := h.sendFile.Close(); err != nil {
 			log.Println(err)
 		}
-		if !haveError {
+		if !noneError {
 			log.Printf("send file failed, release fd")
 		}
 	}
