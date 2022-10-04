@@ -38,8 +38,8 @@ func (s *ServerContext) Close() error {
 }
 
 type Interceptor interface {
-	DoBefore(common.Context, *common.RawMessage) error
-	DoAfter(common.Context, *common.Message)
+	OnReadAfter(common.Context, *common.RawMessage) error
+	OnWriteBefore(common.Context, *common.Message)
 	Name() string
 }
 
@@ -56,7 +56,7 @@ type ChannelWrapper struct {
 }
 
 func (c *ChannelWrapper) Write(msg *common.Message) error {
-	c.doAfter(msg)
+	c.OnWriteBefore(msg)
 	return c.Channel.Write(msg)
 }
 
@@ -72,38 +72,38 @@ func (c *ChannelWrapper) Read() (*common.RawMessage, error) {
 	if err != nil {
 		return msg, err
 	}
-	if err := c.doBefore(msg); err != nil {
+	if err := c.OnReadAfter(msg); err != nil {
 		return nil, err
 	}
 	return msg, nil
 }
 
-func (c *ChannelWrapper) doAfter(msg *common.Message) {
+func (c *ChannelWrapper) OnWriteBefore(msg *common.Message) {
 	var curInterceptor Interceptor
 	defer func() {
 		if err := recover(); err != nil {
-			c.Server.logger.Error(fmt.Sprintf("[panic] do after error, interceptor name=%s, error=%s",
+			c.Server.logger.Error(fmt.Sprintf("[panic] on write before error, interceptor name=%s, error=%s",
 				curInterceptor.Name(), err))
 		}
 	}()
 	for _, interceptor := range c.interceptors {
 		curInterceptor = interceptor
-		interceptor.DoAfter(c.ServerContext, msg)
+		interceptor.OnWriteBefore(c.ServerContext, msg)
 	}
 }
 
-func (c *ChannelWrapper) doBefore(msg *common.RawMessage) (err error) {
+func (c *ChannelWrapper) OnReadAfter(msg *common.RawMessage) (err error) {
 	var curInterceptor Interceptor
 	defer func() {
 		if e := recover(); e != nil {
-			c.Server.logger.Error(fmt.Sprintf("[panic] do before error, interceptor name=%s, error=%s",
+			c.Server.logger.Error(fmt.Sprintf("[panic] on read after error, interceptor name=%s, error=%s",
 				curInterceptor.Name(), e))
 			err = errors.New(fmt.Sprintf("%s", e))
 		}
 	}()
 	for _, interceptor := range c.interceptors {
 		curInterceptor = interceptor
-		if err = interceptor.DoBefore(c.ServerContext, msg); err != nil {
+		if err = interceptor.OnReadAfter(c.ServerContext, msg); err != nil {
 			return err
 		}
 	}

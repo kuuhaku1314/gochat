@@ -15,12 +15,12 @@ func NewCountInterceptor() *countInterceptor {
 	return &countInterceptor{}
 }
 
-func (i *countInterceptor) DoBefore(common.Context, *common.RawMessage) error {
+func (i *countInterceptor) OnReadAfter(common.Context, *common.RawMessage) error {
 	log.Printf("receive message count=%d", atomic.AddInt64(&i.receiveMsgNum, 1))
 	return nil
 }
 
-func (i *countInterceptor) DoAfter(common.Context, *common.Message) {
+func (i *countInterceptor) OnWriteBefore(common.Context, *common.Message) {
 	log.Printf("send message count=%d", atomic.AddInt64(&i.sendMsgNum, 1))
 }
 
