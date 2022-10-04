@@ -6,14 +6,18 @@ import (
 	"gochat/cmd/chatserver/interceptor"
 	"gochat/common"
 	"gochat/common/message/enum"
+	"gochat/common/util"
 	"gochat/goserver"
 	"time"
 )
 
 func main() {
-	s, err := goserver.NewServer("localhost:8080")
+	fmt.Println("输入要监听的IP端口，不输入默认为localhost:8080")
+	address := util.ScanAddress("localhost:8080")
+	s, err := goserver.NewServer(address)
 	if err != nil {
 		fmt.Println(err)
+		time.Sleep(time.Second * 5)
 		return
 	}
 	s.AddInterceptor(interceptor.NewCountInterceptor())

@@ -4,14 +4,19 @@ import (
 	"fmt"
 	"gochat/common"
 	"gochat/common/message/enum"
+	"gochat/common/util"
 	"gochat/goclient"
 	"os"
+	"time"
 )
 
 func main() {
-	cli, err := goclient.NewClient("localhost:8080")
+	fmt.Println("输入要连接的IP端口，不输入默认为localhost:8080")
+	address := util.ScanAddress("localhost:8080")
+	cli, err := goclient.NewClient(address)
 	if err != nil {
 		fmt.Println(err)
+		time.Sleep(time.Second * 5)
 		return
 	}
 	cli.AddHandler(enum.Ping, common.NewPingHandler(enum.Pong))
