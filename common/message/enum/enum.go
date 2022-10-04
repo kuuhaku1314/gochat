@@ -7,8 +7,8 @@ const (
 	UserLogin
 	UserLogout
 	GetOnlineUserList
-	GetRemoteRealIPInfo
 	Ping
 	Pong
 	SendMessage
+	FileTransfer
 )

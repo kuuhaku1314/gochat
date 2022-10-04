@@ -8,6 +8,7 @@ import (
 	"gochat/common/message/enum"
 	"gochat/common/util"
 	"gochat/goserver"
+	"log"
 	"time"
 )
 
@@ -23,7 +24,7 @@ func main() {
 	s.AddInterceptor(interceptor.NewCountInterceptor())
 	s.AddHandler(enum.Display, common.NewDisplayHandler(
 		func(msg string) error {
-			fmt.Println(msg)
+			log.Println(msg)
 			return nil
 		}))
 	s.AddHandler(enum.Pong, common.NewPongHandler(enum.Ping, time.Second*15, time.Minute))

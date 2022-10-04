@@ -6,7 +6,7 @@ import (
 	"gochat/common"
 	"gochat/common/message/enum"
 	"gochat/common/message/msg"
-	"gochat/goserver"
+	"gochat/common/util"
 	"log"
 	"strings"
 	"sync"
@@ -49,6 +49,7 @@ func GetUserHandler() *userHandler {
 				enum.GetOnlineUserList: &getOnlineUserListHandler{},
 				enum.UserLogout:        &logoutHandler{},
 				enum.SendMessage:       &sendMessageHandler{},
+				enum.FileTransfer:      &fileTransferHandler{},
 			},
 		}
 	})
@@ -59,9 +60,11 @@ func (h *userHandler) OnMessage(_ common.Context, _ *common.RawMessage) error {
 	return nil
 }
 
-func (h *userHandler) OnActive(ctx common.Context) {}
+func (h *userHandler) OnActive(ctx common.Context) {
+	_ = ctx.Write(util.NewDisplayMessage("hello, please login"))
+}
 
-func (h *userHandler) OnClose(ctx common.Context) {}
+func (h *userHandler) OnClose(_ common.Context) {}
 
 func (h *userHandler) OnInit(env common.Env) {
 	for code, handler := range h.handlerMap {
@@ -127,24 +130,34 @@ func (h *userHandler) GetOnlineUsers(limit int) []*OnlineUser {
 	return users
 }
 
+func (h *userHandler) CheckLogin(ctx common.Context) (*OnlineUser, bool) {
+	user, ok := h.GetOnlineUser(ctx.RemoteAddr())
+	if !ok {
+		err := ctx.Write(util.NewDisplayMessage("please login"))
+		if err != nil {
+			log.Println(err)
+			_ = ctx.Close()
+		}
+		return nil, false
+	}
+	return user, true
+}
+
 type loginHandler struct {
 	common.BaseHandler
 }
 
 func (h *loginHandler) OnMessage(ctx common.Context, rawMessage *common.RawMessage) error {
 	message := &msg.LoginMsg{}
-	err := json.Unmarshal(rawMessage.RawData, message)
-	if err != nil {
-		log.Println(err)
+	if err := json.Unmarshal(rawMessage.RawData, message); err != nil {
 		GetUserHandler().RemoveOnlineUser(ctx.RemoteAddr())
-		_ = ctx.Write(goserver.NewDisplayMessage("invalid data"))
+		_ = ctx.Write(util.NewDisplayMessage("invalid data"))
 		_ = ctx.Close()
 		return err
 	}
 	if user, ok := GetUserHandler().GetOnlineUser(ctx.RemoteAddr()); ok {
-		err = ctx.Write(goserver.NewDisplayMessage("your already logged"))
+		err := ctx.Write(util.NewDisplayMessage("your already logged"))
 		if err != nil {
-			log.Println(err)
 			GetUserHandler().RemoveOnlineUser(user.Addr())
 			_ = ctx.Close()
 		}
@@ -159,26 +172,24 @@ func (h *loginHandler) OnMessage(ctx common.Context, rawMessage *common.RawMessa
 	}
 	GetUserHandler().AddOnlineUser(user)
 	loginMsg := fmt.Sprintf("login success, now %s, your address is %s", time.Now().String(), user.Addr())
-	err = ctx.Write(goserver.NewDisplayMessage(loginMsg))
-	if err != nil {
-		log.Println(err)
+	if err := ctx.Write(util.NewDisplayMessage(loginMsg)); err != nil {
 		GetUserHandler().RemoveOnlineUser(user.Addr())
 		_ = ctx.Close()
+		return err
 	}
-	go GetUserHandler().BroadcastMessage(nil, goserver.NewDisplayMessage(user.NikeName()+"上线了"))
+	go GetUserHandler().BroadcastMessage(nil, util.NewDisplayMessage(user.NikeName()+"上线了"))
 	return nil
 }
 
-func (h *loginHandler) OnActive(ctx common.Context) {
-	_ = ctx.Write(goserver.NewDisplayMessage("hello, please login into the chat server"))
-}
+func (h *loginHandler) OnActive(_ common.Context) {}
 
 func (h *loginHandler) OnClose(ctx common.Context) {
-	_, ok := GetUserHandler().GetOnlineUser(ctx.RemoteAddr())
+	user, ok := GetUserHandler().GetOnlineUser(ctx.RemoteAddr())
 	if !ok {
 		return
 	}
 	GetUserHandler().RemoveOnlineUser(ctx.RemoteAddr())
+	go GetUserHandler().BroadcastMessage(nil, util.NewDisplayMessage(user.NikeName()+"掉线了"))
 }
 
 type logoutHandler struct {
@@ -186,13 +197,13 @@ type logoutHandler struct {
 }
 
 func (h *logoutHandler) OnMessage(ctx common.Context, _ *common.RawMessage) error {
-	user, ok := GetUserHandler().GetOnlineUser(ctx.RemoteAddr())
+	user, ok := GetUserHandler().CheckLogin(ctx)
 	if !ok {
 		return nil
 	}
 	GetUserHandler().RemoveOnlineUser(ctx.RemoteAddr())
-	_ = ctx.Write(goserver.NewDisplayMessage("logout success"))
-	go GetUserHandler().BroadcastMessage(nil, goserver.NewDisplayMessage(user.NikeName()+"离开了"))
+	_ = ctx.Write(util.NewDisplayMessage("logout success"))
+	go GetUserHandler().BroadcastMessage(nil, util.NewDisplayMessage(user.NikeName()+"离开了"))
 	return nil
 }
 
@@ -201,15 +212,18 @@ type getOnlineUserListHandler struct {
 }
 
 func (h *getOnlineUserListHandler) OnMessage(ctx common.Context, _ *common.RawMessage) error {
+	_, ok := GetUserHandler().CheckLogin(ctx)
+	if !ok {
+		return nil
+	}
 	users := GetUserHandler().GetOnlineUsers(1000)
 	builder := &strings.Builder{}
 	builder.WriteString(fmt.Sprintf("online user number: %d\n", len(users)))
 	for i := range users {
 		builder.WriteString(fmt.Sprintf("address=%s, nickname=%s\n", users[i].Addr(), users[i].NikeName()))
 	}
-	err := ctx.Write(goserver.NewDisplayMessage(builder.String()))
+	err := ctx.Write(util.NewDisplayMessage(builder.String()))
 	if err != nil {
-		log.Println(err)
 		_ = ctx.Close()
 		return err
 	}
@@ -221,22 +235,44 @@ type sendMessageHandler struct {
 }
 
 func (h *sendMessageHandler) OnMessage(ctx common.Context, msg *common.RawMessage) error {
-	user, ok := GetUserHandler().GetOnlineUser(ctx.RemoteAddr())
+	user, ok := GetUserHandler().CheckLogin(ctx)
 	if !ok {
-		err := ctx.Write(goserver.NewDisplayMessage("please login"))
-		if err != nil {
-			log.Println(err)
-			_ = ctx.Close()
-			return err
-		}
+		return nil
 	}
 	str := ""
-	err := json.Unmarshal(msg.RawData, &str)
-	if err != nil {
-		log.Println(err)
+	if err := json.Unmarshal(msg.RawData, &str); err != nil {
 		return err
 	}
 	go GetUserHandler().BroadcastMessage(nil,
-		goserver.NewDisplayMessage(user.NikeName()+",IP:"+user.Addr()+"\n\t"+str))
+		util.NewDisplayMessage(user.NikeName()+",IP:"+user.Addr()+"\n\t"+str))
+	return nil
+}
+
+type fileTransferHandler struct {
+	common.BaseHandler
+}
+
+func (h *fileTransferHandler) OnMessage(ctx common.Context, rawMessage *common.RawMessage) error {
+	_, ok := GetUserHandler().CheckLogin(ctx)
+	if !ok {
+		return nil
+	}
+	transformEntity := &msg.FileTransformEntity{}
+	err := json.Unmarshal(rawMessage.RawData, &transformEntity)
+	if err != nil {
+		return err
+	}
+	if ctx.RemoteAddr() != transformEntity.From {
+		return ctx.Write(util.NewDisplayMessage("dont send fake message, your ip is " + ctx.RemoteAddr()))
+	}
+	receiver, ok := GetUserHandler().GetOnlineUser(transformEntity.To)
+	if !ok {
+		return ctx.Write(util.NewDisplayMessage("not found receiver"))
+	}
+	go GetUserHandler().BroadcastMessage([]*OnlineUser{receiver},
+		&common.Message{
+			Code:    enum.FileTransfer,
+			RawData: transformEntity,
+		})
 	return nil
 }

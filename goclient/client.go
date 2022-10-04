@@ -112,8 +112,7 @@ func (c *Client) Start() {
 			if msg == nil {
 				continue
 			}
-			err := ctx.Write(msg)
-			if err != nil {
+			if err := ctx.Write(msg); err != nil {
 				log.Println(err)
 			}
 		}
@@ -125,6 +124,7 @@ func (c *Client) Start() {
 		}
 		message, err := ctx.Read()
 		if err != nil {
+			// 非主动关闭
 			if !c.isClosed {
 				c.logger.Error(err)
 			}
@@ -188,8 +188,7 @@ func (c *commandDispatcher) Dispatch() {
 			params = arr[1]
 		}
 		if !command.UseParseFunc {
-			err := command.LocalParseFunc(params)
-			if err != nil {
+			if err := command.LocalParseFunc(params); err != nil {
 				c.client.logger.Error(err)
 			}
 			continue
@@ -279,7 +278,7 @@ func (c *Client) NewCommandDispatcher(reader io.Reader) Dispatcher {
 				log.Println("please add command after help")
 				return nil
 			}
-			command, ok := dispatcher.commandMap[params]
+			command, ok := dispatcher.commandMap[str]
 			if !ok {
 				log.Println("not found command")
 				return nil

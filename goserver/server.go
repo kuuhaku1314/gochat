@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"gochat/common"
-	"gochat/common/message/enum"
 	"net"
 	"sync"
 )
@@ -253,11 +252,4 @@ func SafelyDo(handler common.Handler, ctx common.Context, message *common.RawMes
 		}
 	}()
 	return handler.OnMessage(ctx, message)
-}
-
-func NewDisplayMessage(err string) *common.Message {
-	return &common.Message{
-		Code:    enum.Display,
-		RawData: err,
-	}
 }

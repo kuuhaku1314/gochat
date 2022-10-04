@@ -1,7 +1,7 @@
 package common
 
 import (
-	"fmt"
+	"log"
 	"os"
 )
 
@@ -28,28 +28,28 @@ func NewConsoleLogger(level LogLevel) *ConsoleLogger {
 	return &ConsoleLogger{level: level}
 }
 
-func (log *ConsoleLogger) Debug(msg ...interface{}) {
-	if log.level > Debug {
+func (l *ConsoleLogger) Debug(msg ...interface{}) {
+	if l.level > Debug {
 		return
 	}
-	fmt.Println(msg)
+	log.Println(msg)
 }
 
-func (log *ConsoleLogger) Info(msg ...interface{}) {
-	if log.level > Info {
+func (l *ConsoleLogger) Info(msg ...interface{}) {
+	if l.level > Info {
 		return
 	}
-	fmt.Println(msg)
+	log.Println(msg)
 }
 
-func (log *ConsoleLogger) Error(msg ...interface{}) {
-	if log.level > Error {
+func (l *ConsoleLogger) Error(msg ...interface{}) {
+	if l.level > Error {
 		return
 	}
-	fmt.Println(msg)
+	log.Println(msg)
 }
 
-func (log *ConsoleLogger) Fatal(msg ...interface{}) {
-	fmt.Println(msg)
+func (l *ConsoleLogger) Fatal(msg ...interface{}) {
+	log.Println(msg)
 	os.Exit(-1)
 }

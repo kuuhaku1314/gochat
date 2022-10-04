@@ -3,6 +3,8 @@ package util
 import (
 	"bufio"
 	"errors"
+	"gochat/common"
+	"gochat/common/message/enum"
 	"os"
 	"strconv"
 	"strings"
@@ -28,4 +30,17 @@ func ScanAddress(defaultIP string) string {
 		return defaultIP
 	}
 	return ip
+}
+
+func NewDisplayMessage(msg string) *common.Message {
+	return &common.Message{
+		Code:    enum.Display,
+		RawData: msg,
+	}
+}
+
+func AssertNotError(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
