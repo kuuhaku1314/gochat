@@ -255,7 +255,7 @@ func (h *fileTransferHandler) FileStateCompleted(_ common.Context, fileTransform
 	if _, err := h.receiveFile.Write(bytes); err != nil {
 		return err
 	}
-	log.Println("receive file completed")
+	log.Printf("receive file completed, local filename=%s", h.receiveFile.Name())
 	h.resetReceiveFile(true)
 	return nil
 }
