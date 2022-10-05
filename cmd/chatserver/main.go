@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	fmt.Println("输入要监听的IP端口，不输入默认为localhost:8080")
+	log.Println("输入要监听的IP端口，不输入默认为localhost:8080")
 	address := util.ScanAddress("localhost:8080")
 	s, err := goserver.NewServer(address)
 	if err != nil {

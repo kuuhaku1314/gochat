@@ -3,10 +3,10 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"gochat/common"
 	"gochat/common/message/enum"
 	"gochat/common/message/msg"
+	"gochat/common/util"
 	"gochat/goclient"
 	"io"
 	"log"
@@ -57,7 +57,7 @@ func NewFileTransferHandler(timeout time.Duration) *fileTransferHandler {
 	return fileTransfer
 }
 
-func (h *fileTransferHandler) Commands() []*goclient.Command {
+func (h *fileTransferHandler) commands() []*goclient.Command {
 	return []*goclient.Command{h.confirmAccept(), h.rejectAccept(), h.trySendFile()}
 }
 
@@ -278,9 +278,12 @@ func (h *fileTransferHandler) OnActive(_ common.Context) {}
 func (h *fileTransferHandler) OnClose(_ common.Context) {}
 
 func (h *fileTransferHandler) OnInit(_ common.Env) {
+	for _, command := range h.commands() {
+		util.AssertNotError(GetClient().Register(command))
+	}
 	ticker := time.NewTicker(time.Second * 5)
 	go func() {
-		fmt.Println("[start file watch]")
+		log.Println("[start file watch]")
 		for {
 			<-ticker.C
 			if !h.checkSendFileTimeout() {
