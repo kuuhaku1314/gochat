@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"gochat/common"
+	"gochat/common/util"
 	"io"
 	"log"
 	"net"
@@ -62,7 +63,7 @@ func NewClient(address string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	client.logger.Info(fmt.Sprintf("start goclient success, local address=%s", conn.LocalAddr().String()))
+	client.logger.Info(fmt.Sprintf("start client success, local address=%s", conn.LocalAddr().String()))
 	return client, nil
 }
 
@@ -297,8 +298,8 @@ func (c *Client) NewCommandDispatcher(reader io.Reader) Dispatcher {
 		},
 		Tips: "exit process",
 	}
-	_ = dispatcher.Register(listCommand)
-	_ = dispatcher.Register(helpCommand)
-	_ = dispatcher.Register(exitCommand)
+	util.AssertNotError(dispatcher.Register(listCommand))
+	util.AssertNotError(dispatcher.Register(helpCommand))
+	util.AssertNotError(dispatcher.Register(exitCommand))
 	return dispatcher
 }

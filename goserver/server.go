@@ -165,14 +165,14 @@ func (s *Server) AddInterceptor(i Interceptor) {
 }
 
 func (s *Server) Serve() {
-	s.logger.Info(fmt.Sprintf("goserver start, bind address=%s", s.address))
+	s.logger.Info(fmt.Sprintf("server start serve, bind address=%s", s.address))
 	for true {
 		conn, err := s.listener.Accept()
 		if err != nil {
 			err = s.listener.Close()
 			s.logger.Fatal(err)
 		}
-		s.logger.Info("remote chatclient connecting " + conn.RemoteAddr().String())
+		s.logger.Info("new remote client connecting " + conn.RemoteAddr().String())
 		go s.handleConn(conn)
 	}
 }
