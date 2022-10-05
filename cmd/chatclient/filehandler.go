@@ -76,7 +76,7 @@ func (h *fileTransferHandler) trySendFile() *goclient.Command {
 				log.Println("invalid params")
 				return nil
 			}
-			if err := h.NotifySendFile(localIP, remoteIP, path); err != nil {
+			if err := h.notifySendFile(localIP, remoteIP, path); err != nil {
 				log.Println(err)
 			}
 			return nil
@@ -96,6 +96,19 @@ func (h *fileTransferHandler) confirmAccept() *goclient.Command {
 				return nil, nil
 			}
 			if h.receiveFileEntity.State == msg.FileWaitingSend {
+				_, err := os.Stat(params)
+				if err != nil && !os.IsNotExist(err) {
+					log.Println(err)
+					return nil, nil
+				}
+				if os.IsNotExist(err) {
+					log.Println("该文件已存在，请换个文件名")
+					return nil, nil
+				}
+				if strings.HasSuffix(params, string(os.PathSeparator)) {
+					log.Println("不能使用目录当文件名")
+					return nil, nil
+				}
 				log.Println("开始接受文件")
 				file, err := os.Create(params)
 				if err != nil {
@@ -307,6 +320,8 @@ func (h *fileTransferHandler) OnInit(_ common.Env) {
 	}()
 }
 
+func (h *fileTransferHandler) OnRemove(_ common.Env) {}
+
 func (h *fileTransferHandler) checkReceiveFileTimeout() bool {
 	if h.receiveFileEntity != nil && h.receiveFile != nil && h.lastReceiveFileTime != 0 {
 		return h.lastReceiveFileTime+h.timeout > int64(time.Now().Second())
@@ -321,9 +336,7 @@ func (h *fileTransferHandler) checkSendFileTimeout() bool {
 	return true
 }
 
-func (h *fileTransferHandler) OnRemove(_ common.Env) {}
-
-func (h *fileTransferHandler) NotifySendFile(localIP, remoteIP, filepath string) error {
+func (h *fileTransferHandler) notifySendFile(localIP, remoteIP, filepath string) error {
 	h.sendLock.Lock()
 	defer h.sendLock.Unlock()
 	if h.sendFileEntity != nil {
