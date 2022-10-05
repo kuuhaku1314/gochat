@@ -189,7 +189,7 @@ func (h *loginHandler) OnClose(ctx common.Context) {
 		return
 	}
 	GetUserHandler().RemoveOnlineUser(ctx.RemoteAddr())
-	go GetUserHandler().BroadcastMessage(nil, util.NewDisplayMessage(user.NikeName()+"掉线了"))
+	GetUserHandler().BroadcastMessage(nil, util.NewDisplayMessage(user.NikeName()+"掉线了"))
 }
 
 type logoutHandler struct {
@@ -258,8 +258,7 @@ func (h *fileTransferHandler) OnMessage(ctx common.Context, rawMessage *common.R
 		return nil
 	}
 	transformEntity := &msg.FileTransformEntity{}
-	err := json.Unmarshal(rawMessage.RawData, &transformEntity)
-	if err != nil {
+	if err := json.Unmarshal(rawMessage.RawData, &transformEntity); err != nil {
 		return err
 	}
 	if ctx.RemoteAddr() != transformEntity.From {
@@ -269,7 +268,7 @@ func (h *fileTransferHandler) OnMessage(ctx common.Context, rawMessage *common.R
 	if !ok {
 		return ctx.Write(util.NewDisplayMessage("not found receiver"))
 	}
-	go GetUserHandler().BroadcastMessage([]*OnlineUser{receiver},
+	GetUserHandler().BroadcastMessage([]*OnlineUser{receiver},
 		&common.Message{
 			Code:    enum.FileTransfer,
 			RawData: transformEntity,
