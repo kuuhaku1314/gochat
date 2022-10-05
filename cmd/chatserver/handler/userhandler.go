@@ -79,20 +79,20 @@ func (h *userHandler) OnRemove(env common.Env) {
 }
 
 func (h *userHandler) AddOnlineUser(user *OnlineUser) {
-	h.onlineUserMap.Store(user.Addr(), user)
+	h.onlineUserMap.Store(util.GenerateUniqueID(user.Addr()), user)
 }
 
-func (h *userHandler) RemoveOnlineUser(addr string) {
-	_, ok := h.GetOnlineUser(addr)
+func (h *userHandler) RemoveOnlineUser(id string) {
+	_, ok := h.GetOnlineUser(id)
 	if ok {
-		h.onlineUserMap.Delete(addr)
+		h.onlineUserMap.Delete(id)
 	}
 }
 
 func (h *userHandler) BroadcastMessage(targetUser []*OnlineUser, message *common.Message) {
 	if len(targetUser) != 0 {
 		for _, user := range targetUser {
-			onlineUser, ok := h.GetOnlineUser(user.Addr())
+			onlineUser, ok := h.GetOnlineUser(util.GenerateUniqueID(user.Addr()))
 			if ok {
 				_ = onlineUser.ctx.Write(message)
 			}
@@ -103,14 +103,14 @@ func (h *userHandler) BroadcastMessage(targetUser []*OnlineUser, message *common
 	for i := range users {
 		err := users[i].ctx.Write(message)
 		if err != nil {
-			h.RemoveOnlineUser(users[i].Addr())
+			h.RemoveOnlineUser(util.GenerateUniqueID(users[i].Addr()))
 			_ = users[i].ctx.Close()
 		}
 	}
 }
 
-func (h *userHandler) GetOnlineUser(addr string) (*OnlineUser, bool) {
-	user, ok := h.onlineUserMap.Load(addr)
+func (h *userHandler) GetOnlineUser(id string) (*OnlineUser, bool) {
+	user, ok := h.onlineUserMap.Load(id)
 	if !ok {
 		return nil, ok
 	}
@@ -131,7 +131,7 @@ func (h *userHandler) GetOnlineUsers(limit int) []*OnlineUser {
 }
 
 func (h *userHandler) CheckLogin(ctx common.Context) (*OnlineUser, bool) {
-	user, ok := h.GetOnlineUser(ctx.RemoteAddr())
+	user, ok := h.GetOnlineUser(util.GenerateUniqueID(ctx.RemoteAddr()))
 	if !ok {
 		err := ctx.Write(util.NewDisplayMessage("please login"))
 		if err != nil {
@@ -150,15 +150,15 @@ type loginHandler struct {
 func (h *loginHandler) OnMessage(ctx common.Context, rawMessage *common.RawMessage) error {
 	message := &msg.LoginMsg{}
 	if err := json.Unmarshal(rawMessage.RawData, message); err != nil {
-		GetUserHandler().RemoveOnlineUser(ctx.RemoteAddr())
+		GetUserHandler().RemoveOnlineUser(util.GenerateUniqueID(ctx.RemoteAddr()))
 		_ = ctx.Write(util.NewDisplayMessage("invalid data"))
 		_ = ctx.Close()
 		return err
 	}
-	if user, ok := GetUserHandler().GetOnlineUser(ctx.RemoteAddr()); ok {
+	if user, ok := GetUserHandler().GetOnlineUser(util.GenerateUniqueID(ctx.RemoteAddr())); ok {
 		err := ctx.Write(util.NewDisplayMessage("your already logged"))
 		if err != nil {
-			GetUserHandler().RemoveOnlineUser(user.Addr())
+			GetUserHandler().RemoveOnlineUser(util.GenerateUniqueID(user.Addr()))
 			_ = ctx.Close()
 		}
 		return err
@@ -171,9 +171,9 @@ func (h *loginHandler) OnMessage(ctx common.Context, rawMessage *common.RawMessa
 		addr: ctx.RemoteAddr(),
 	}
 	GetUserHandler().AddOnlineUser(user)
-	loginMsg := fmt.Sprintf("login success, now %s, your address is %s", time.Now().String(), user.Addr())
+	loginMsg := fmt.Sprintf("login success, now %s, your IP is %s, ID=%s", time.Now().String(), user.Addr(), util.GenerateUniqueID(user.Addr()))
 	if err := ctx.Write(util.NewDisplayMessage(loginMsg)); err != nil {
-		GetUserHandler().RemoveOnlineUser(user.Addr())
+		GetUserHandler().RemoveOnlineUser(util.GenerateUniqueID(user.Addr()))
 		_ = ctx.Close()
 		return err
 	}
@@ -184,11 +184,11 @@ func (h *loginHandler) OnMessage(ctx common.Context, rawMessage *common.RawMessa
 func (h *loginHandler) OnActive(_ common.Context) {}
 
 func (h *loginHandler) OnClose(ctx common.Context) {
-	user, ok := GetUserHandler().GetOnlineUser(ctx.RemoteAddr())
+	user, ok := GetUserHandler().GetOnlineUser(util.GenerateUniqueID(ctx.RemoteAddr()))
 	if !ok {
 		return
 	}
-	GetUserHandler().RemoveOnlineUser(ctx.RemoteAddr())
+	GetUserHandler().RemoveOnlineUser(util.GenerateUniqueID(ctx.RemoteAddr()))
 	GetUserHandler().BroadcastMessage(nil, util.NewDisplayMessage(user.NikeName()+"掉线了"))
 }
 
@@ -201,7 +201,7 @@ func (h *logoutHandler) OnMessage(ctx common.Context, _ *common.RawMessage) erro
 	if !ok {
 		return nil
 	}
-	GetUserHandler().RemoveOnlineUser(ctx.RemoteAddr())
+	GetUserHandler().RemoveOnlineUser(util.GenerateUniqueID(ctx.RemoteAddr()))
 	_ = ctx.Write(util.NewDisplayMessage("logout success"))
 	go GetUserHandler().BroadcastMessage(nil, util.NewDisplayMessage(user.NikeName()+"离开了"))
 	return nil
@@ -220,7 +220,7 @@ func (h *getOnlineUserListHandler) OnMessage(ctx common.Context, _ *common.RawMe
 	builder := &strings.Builder{}
 	builder.WriteString(fmt.Sprintf("online user number: %d\n", len(users)))
 	for i := range users {
-		builder.WriteString(fmt.Sprintf("address=%s, nickname=%s\n", users[i].Addr(), users[i].NikeName()))
+		builder.WriteString(fmt.Sprintf("ID=%s, nickname=%s\n", util.GenerateUniqueID(users[i].Addr()), users[i].NikeName()))
 	}
 	err := ctx.Write(util.NewDisplayMessage(builder.String()))
 	if err != nil {
@@ -244,7 +244,7 @@ func (h *sendMessageHandler) OnMessage(ctx common.Context, msg *common.RawMessag
 		return err
 	}
 	go GetUserHandler().BroadcastMessage(nil,
-		util.NewDisplayMessage(user.NikeName()+",IP:"+user.Addr()+"\n\t"+str))
+		util.NewDisplayMessage(user.NikeName()+",ID:"+util.GenerateUniqueID(user.Addr())+"\n\t"+str))
 	return nil
 }
 
@@ -261,8 +261,8 @@ func (h *fileTransferHandler) OnMessage(ctx common.Context, rawMessage *common.R
 	if err := json.Unmarshal(rawMessage.RawData, &transformEntity); err != nil {
 		return err
 	}
-	if ctx.RemoteAddr() != transformEntity.From {
-		return ctx.Write(util.NewDisplayMessage("dont send fake message, your ip is " + ctx.RemoteAddr()))
+	if util.GenerateUniqueID(ctx.RemoteAddr()) != transformEntity.From {
+		return ctx.Write(util.NewDisplayMessage("dont send fake message, your id is " + util.GenerateUniqueID(ctx.RemoteAddr())))
 	}
 	receiver, ok := GetUserHandler().GetOnlineUser(transformEntity.To)
 	if !ok {

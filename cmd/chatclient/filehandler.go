@@ -71,17 +71,17 @@ func (h *fileTransferHandler) trySendFile() *goclient.Command {
 				log.Println("invalid params")
 				return nil
 			}
-			localIP, remoteIP, path := strings.TrimSpace(arr[0]), strings.TrimSpace(arr[1]), strings.TrimSpace(arr[2])
-			if len(localIP) == 0 || len(remoteIP) == 0 || len(path) == 0 {
+			localID, remoteID, path := strings.TrimSpace(arr[0]), strings.TrimSpace(arr[1]), strings.TrimSpace(arr[2])
+			if len(localID) == 0 || len(remoteID) == 0 || len(path) == 0 {
 				log.Println("invalid params")
 				return nil
 			}
-			if err := h.notifySendFile(localIP, remoteIP, path); err != nil {
+			if err := h.notifySendFile(localID, remoteID, path); err != nil {
 				log.Println(err)
 			}
 			return nil
 		},
-		Tips: "use like: sendfile [localIP] [remoteIP] [path]",
+		Tips: "use like: sendfile [localID] [remoteID] [path]",
 	}
 }
 
@@ -101,7 +101,7 @@ func (h *fileTransferHandler) confirmAccept() *goclient.Command {
 					log.Println(err)
 					return nil, nil
 				}
-				if os.IsNotExist(err) {
+				if os.IsExist(err) {
 					log.Println("该文件已存在，请换个文件名")
 					return nil, nil
 				}
@@ -182,7 +182,7 @@ func (h *fileTransferHandler) FileStateAck(ctx common.Context, fileTransformEnti
 		Code:    enum.FileTransfer,
 		RawData: h.sendFileEntity,
 	})
-	h.lastSendFileTime = int64(time.Now().Second())
+	h.lastSendFileTime = time.Now().Unix()
 	h.sendBlock++
 	log.Printf("send file blocksize=[%d], [%d/%d]\n", len(h.sendFileEntity.Content), h.sendBlock, int64(math.Round(float64(h.sendFileEntity.FileSize)/float64(len(h.sendBuff)))))
 	if eofFlag {
@@ -208,7 +208,7 @@ func (h *fileTransferHandler) FileStateWaitingSend(ctx common.Context, fileTrans
 	defer h.receiveLock.Unlock()
 	entity := h.receiveFileEntity
 	if entity != nil {
-		log.Printf("%s想要给你发送文件，文件名:%s, 文件大小:%db，但正在接受文件中所以自动拒绝", fileTransformEntity.From,
+		log.Printf("ID:%s 想要给你发送文件，文件名:%s, 文件大小:%db，但正在接受文件中所以自动拒绝", fileTransformEntity.From,
 			fileTransformEntity.FileName, fileTransformEntity.FileSize)
 		return ctx.Write(&common.Message{
 			Code: enum.FileTransfer,
@@ -220,7 +220,7 @@ func (h *fileTransferHandler) FileStateWaitingSend(ctx common.Context, fileTrans
 		})
 	}
 	h.receiveFileEntity = fileTransformEntity
-	log.Printf("%s想要给你发送文件，文件名:%s, 文件大小:%db", fileTransformEntity.From,
+	log.Printf("ID%s 想要给你发送文件，文件名:%s, 文件大小:%db", fileTransformEntity.From,
 		fileTransformEntity.FileName, fileTransformEntity.FileSize)
 	log.Printf("请回复confirm [filepath]去接收或reject拒绝接收")
 	return nil
@@ -232,7 +232,7 @@ func (h *fileTransferHandler) FileStateSending(ctx common.Context, fileTransform
 	if !h.checkReceive(fileTransformEntity, msg.FileAccept) {
 		return nil
 	}
-	h.lastReceiveFileTime = int64(time.Now().Second())
+	h.lastReceiveFileTime = time.Now().Unix()
 	h.receiveBlock++
 	bytes, err := base64.StdEncoding.DecodeString(fileTransformEntity.Content)
 	if err != nil {
@@ -258,7 +258,7 @@ func (h *fileTransferHandler) FileStateCompleted(_ common.Context, fileTransform
 	if !h.checkReceive(fileTransformEntity, msg.FileAccept) {
 		return nil
 	}
-	h.lastReceiveFileTime = int64(time.Now().Second())
+	h.lastReceiveFileTime = time.Now().Unix()
 	h.receiveBlock++
 	bytes, err := base64.StdEncoding.DecodeString(fileTransformEntity.Content)
 	if err != nil {
@@ -324,23 +324,24 @@ func (h *fileTransferHandler) OnRemove(_ common.Env) {}
 
 func (h *fileTransferHandler) checkReceiveFileTimeout() bool {
 	if h.receiveFileEntity != nil && h.receiveFile != nil && h.lastReceiveFileTime != 0 {
-		return h.lastReceiveFileTime+h.timeout > int64(time.Now().Second())
+		return h.lastReceiveFileTime+h.timeout > time.Now().Unix()
 	}
 	return true
 }
 
 func (h *fileTransferHandler) checkSendFileTimeout() bool {
 	if h.sendFileEntity != nil && h.sendFile != nil && h.lastSendFileTime != 0 {
-		return h.lastSendFileTime+h.timeout > int64(time.Now().Second())
+		return h.lastSendFileTime+h.timeout > time.Now().Unix()
 	}
 	return true
 }
 
-func (h *fileTransferHandler) notifySendFile(localIP, remoteIP, filepath string) error {
+func (h *fileTransferHandler) notifySendFile(localID, remoteID, filepath string) error {
 	h.sendLock.Lock()
 	defer h.sendLock.Unlock()
 	if h.sendFileEntity != nil {
-		log.Println("已经有文件再发送了，请等待发送完成")
+		log.Printf("已经有文件在发送了，请等待发送完成, 若正在等待对方确认中，请等待%d秒后自动取消发送\n",
+			h.lastSendFileTime+h.timeout-time.Now().Unix())
 		return nil
 	}
 	fileInfo, err := os.Stat(filepath)
@@ -359,12 +360,12 @@ func (h *fileTransferHandler) notifySendFile(localIP, remoteIP, filepath string)
 	h.sendFileEntity = &msg.FileTransformEntity{
 		FileSize: fileInfo.Size(),
 		FileName: fileInfo.Name(),
-		To:       remoteIP,
-		From:     localIP,
+		To:       remoteID,
+		From:     localID,
 		Content:  "",
 		State:    msg.FileWaitingSend,
 	}
-	h.lastSendFileTime = int64(time.Now().Second())
+	h.lastSendFileTime = time.Now().Unix()
 	GetClient().SendMessage(&common.Message{
 		Code:    enum.FileTransfer,
 		RawData: h.sendFileEntity,

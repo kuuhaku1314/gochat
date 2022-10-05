@@ -2,6 +2,7 @@ package util
 
 import (
 	"bufio"
+	"crypto/md5"
 	"errors"
 	"gochat/common"
 	"gochat/common/message/enum"
@@ -43,4 +44,18 @@ func AssertNotError(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+var (
+	hexTable = [16]byte{
+		'0', '1', '2', '3', '4', '5', '6', '7',
+		'8', '9', 'a', 'b', 'c', 'd', 'e', 'f'}
+)
+
+func GenerateUniqueID(addr string) string {
+	sum := md5.Sum([]byte(addr))
+	for i := range sum {
+		sum[i] = hexTable[sum[i]%0x10]
+	}
+	return string(sum[:])
 }

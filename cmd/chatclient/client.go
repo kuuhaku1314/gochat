@@ -34,7 +34,7 @@ func main() {
 			log.Println(msg)
 			return nil
 		}))
-	cli.AddHandler(enum.FileTransfer, NewFileTransferHandler(time.Second*60))
+	cli.AddHandler(enum.FileTransfer, NewFileTransferHandler(time.Second*90))
 	util.AssertNotError(cli.Register(NewLoginCommand()))
 	util.AssertNotError(cli.Register(NewLogoutCommand()))
 	util.AssertNotError(cli.Register(NewGetUserListCommand()))
