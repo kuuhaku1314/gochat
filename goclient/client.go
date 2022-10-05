@@ -31,10 +31,6 @@ func (s *ClientContext) RemoveHandler(code common.MessageCode) {
 	s.client.RemoveHandler(code)
 }
 
-type ClientEnv interface {
-	common.Env
-}
-
 type Client struct {
 	conn         net.Conn
 	handlerMap   map[common.MessageCode]common.Handler

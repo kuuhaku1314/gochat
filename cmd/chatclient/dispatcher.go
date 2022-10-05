@@ -19,7 +19,6 @@ func (c *commandDispatcher) Dispatch() {
 	for c.Scan() {
 		str := c.Text()
 		if len(str) == 0 {
-			log.Println("invalid input")
 			continue
 		}
 		arr := strings.SplitN(str, " ", 2)
