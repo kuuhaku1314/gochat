@@ -1,9 +1,11 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"time"
 )
 
 const MagicNumber int64 = 0x10086
@@ -46,8 +48,27 @@ func (h *Header) Bytes() []byte {
 }
 
 func ReadHeader(reader io.Reader) (*Header, error) {
-	bytes := make([]byte, 9)
-	_, err := reader.Read(bytes)
+	var (
+		ctx, cancelFunc = context.WithTimeout(context.TODO(), time.Second*5)
+		c               = make(chan struct{}, 1)
+		bytes           = make([]byte, 9)
+		err             error
+		timeoutFlag     bool
+	)
+
+	go func() {
+		_, err = reader.Read(bytes)
+		c <- struct{}{}
+	}()
+	select {
+	case <-c:
+	case <-ctx.Done():
+		timeoutFlag = true
+	}
+	cancelFunc()
+	if timeoutFlag {
+		return nil, errors.New("read header timeout")
+	}
 	if err != nil {
 		return nil, err
 	}
