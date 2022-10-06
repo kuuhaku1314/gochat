@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 )
 
 type ClientContext struct {
@@ -142,10 +143,13 @@ func (c *Client) Start() {
 			continue
 		}
 	}
+	log.Println("client is closing")
 	_ = c.Close()
 	for _, handler := range c.handlerMap {
 		handler.OnClose(ctx)
 	}
+	log.Println("closing success")
+	time.Sleep(time.Second * 3)
 }
 
 func (c *Client) SendMessage(message *common.Message) {

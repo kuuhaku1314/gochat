@@ -149,12 +149,12 @@ func (s *Server) AddHandler(code common.MessageCode, handler common.Handler) {
 
 func (s *Server) RemoveHandler(code common.MessageCode) {
 	s.lock.Lock()
-	defer s.lock.Unlock()
 	handler, ok := s.handlerMap[code]
 	if ok {
 		s.logger.Info(fmt.Sprintf("remove handler code=%d", code))
 	}
 	delete(s.handlerMap, code)
+	s.lock.Unlock()
 	handler.OnRemove(s)
 }
 
@@ -232,7 +232,7 @@ func (s *Server) handleConn(conn net.Conn) {
 		}
 		handler, ok := s.handlerMap[message.Code]
 		if !ok {
-			s.logger.Info(fmt.Sprintf("not have matchable handler, remote address=%s, code=%d",
+			s.logger.Info(fmt.Sprintf("not found matchable handler, remote address=%s, code=%d",
 				ctx.RemoteAddr(), message.Code))
 			break
 		}
