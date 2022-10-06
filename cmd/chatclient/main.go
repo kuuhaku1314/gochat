@@ -13,6 +13,9 @@ import (
 var client *goclient.Client
 
 func GetClient() *goclient.Client {
+	if client == nil {
+		panic("client not initialized")
+	}
 	return client
 }
 

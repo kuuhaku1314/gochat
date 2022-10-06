@@ -16,20 +16,20 @@ type ClientContext struct {
 	common.Channel
 }
 
-func (s *ClientContext) RemoteAddr() string {
-	return s.remoteAddr
+func (ctx *ClientContext) RemoteAddr() string {
+	return ctx.remoteAddr
 }
 
-func (s *ClientContext) LocalAddr() string {
-	return s.localAddr
+func (ctx *ClientContext) LocalAddr() string {
+	return ctx.localAddr
 }
 
-func (s *ClientContext) AddHandler(code common.MessageCode, handler common.Handler) {
-	s.client.AddHandler(code, handler)
+func (ctx *ClientContext) AddHandler(code common.MessageCode, handler common.Handler) {
+	ctx.client.AddHandler(code, handler)
 }
 
-func (s *ClientContext) RemoveHandler(code common.MessageCode) {
-	s.client.RemoveHandler(code)
+func (ctx *ClientContext) RemoveHandler(code common.MessageCode) {
+	ctx.client.RemoveHandler(code)
 }
 
 type Client struct {
@@ -38,9 +38,10 @@ type Client struct {
 	codec        common.Codec
 	logger       common.Logger
 	isClosed     bool
-	once         sync.Once
+	once         *sync.Once
 	messageQueue chan *common.Message
 	dispatcher   Dispatcher
+	lock         *sync.Mutex
 }
 
 func NewClient(address string) (*Client, error) {
@@ -53,7 +54,9 @@ func NewClient(address string) (*Client, error) {
 		handlerMap:   make(map[common.MessageCode]common.Handler),
 		codec:        common.NewJsonCodec(conn),
 		logger:       common.NewConsoleLogger(common.Debug),
+		once:         &sync.Once{},
 		messageQueue: make(chan *common.Message, 1000),
+		lock:         &sync.Mutex{},
 	}
 	header := common.NewHeader(common.JsonCodecType)
 	_, err = client.conn.Write(header.Bytes())
@@ -65,7 +68,13 @@ func NewClient(address string) (*Client, error) {
 }
 
 func (c *Client) AddHandler(code common.MessageCode, handler common.Handler) {
+	c.lock.Lock()
+	_, ok := c.handlerMap[code]
+	if ok {
+		c.logger.Fatal("duplicate handler")
+	}
 	c.handlerMap[code] = handler
+	c.lock.Unlock()
 	handler.OnInit(c)
 }
 
@@ -84,15 +93,23 @@ func (c *Client) SetDispatcher(dispatcher Dispatcher) {
 }
 
 func (c *Client) Register(command *Command) error {
+	if c.dispatcher == nil {
+		c.logger.Fatal("dispatcher is not set")
+	}
 	return c.dispatcher.Register(command)
 }
 
 func (c *Client) RemoveHandler(code common.MessageCode) {
+	c.lock.Lock()
 	handler, ok := c.handlerMap[code]
-	if ok {
-		c.logger.Info(fmt.Sprintf("remove handler code=%d", code))
+	if !ok {
+		c.logger.Error(fmt.Sprintf("not found handler code=%d", code))
+		c.lock.Unlock()
+		return
 	}
+	c.logger.Info(fmt.Sprintf("remove handler code=%d", code))
 	delete(c.handlerMap, code)
+	c.lock.Unlock()
 	handler.OnRemove(c)
 }
 
@@ -119,7 +136,7 @@ func (c *Client) Start() {
 				log.Println(err)
 			}
 		}
-		c.logger.Info("end pull message")
+		c.logger.Info("client is closed, end pull message")
 	}()
 	for {
 		if c.isClosed {
