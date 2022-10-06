@@ -370,6 +370,7 @@ func (h *fileTransferHandler) notifySendFile(localID, remoteID, filepath string)
 		Code:    enum.FileTransfer,
 		RawData: h.sendFileEntity,
 	})
+	log.Printf("请求发送成功，正在等待对方接受或拒绝响应， 最多等待%d秒后自动取消发送\n", h.timeout)
 	return nil
 }
 
