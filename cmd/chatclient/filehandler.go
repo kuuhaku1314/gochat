@@ -238,7 +238,7 @@ func (h *fileTransferHandler) FileStateSending(ctx common.Context, fileTransform
 	if err != nil {
 		return err
 	}
-	log.Printf("receiving file blocksize=[%d], [%d/%d]\n", len(fileTransformEntity.Content), h.receiveBlock, int64(math.Round(float64(h.receiveFileEntity.FileSize)/float64(len(h.sendBuff)))))
+	log.Printf("receiving file blocksize=[%d], [%d/%d]\n", len(fileTransformEntity.Content), h.receiveBlock, int64(math.Ceil(float64(h.receiveFileEntity.FileSize)/float64(len(h.sendBuff)))))
 	if _, err := h.receiveFile.Write(bytes); err != nil {
 		return err
 	}
@@ -264,7 +264,7 @@ func (h *fileTransferHandler) FileStateCompleted(_ common.Context, fileTransform
 	if err != nil {
 		return err
 	}
-	log.Printf("receiving file blocksize=[%d], [%d/%d]\n", len(fileTransformEntity.Content), h.receiveBlock, int64(math.Round(float64(h.receiveFileEntity.FileSize)/float64(len(h.sendBuff)))))
+	log.Printf("receiving file blocksize=[%d], [%d/%d]\n", len(fileTransformEntity.Content), h.receiveBlock, int64(math.Ceil(float64(h.receiveFileEntity.FileSize)/float64(len(h.sendBuff)))))
 	if _, err := h.receiveFile.Write(bytes); err != nil {
 		return err
 	}
