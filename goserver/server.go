@@ -1,10 +1,10 @@
 package goserver
 
 import (
-	"errors"
 	"fmt"
 	"gochat/common"
 	"net"
+	"runtime/debug"
 	"sync"
 )
 
@@ -98,7 +98,7 @@ func (c *ChannelWrapper) OnReadAfter(msg *common.RawMessage) (err error) {
 		if e := recover(); e != nil {
 			c.Server.logger.Error(fmt.Sprintf("[panic] on read after error, interceptor name=%s, error=%s",
 				curInterceptor.Name(), e))
-			err = errors.New(fmt.Sprintf("%s", e))
+			err = fmt.Errorf("%s", e)
 		}
 	}()
 	for _, interceptor := range c.interceptors {
@@ -166,7 +166,7 @@ func (s *Server) AddInterceptor(i Interceptor) {
 
 func (s *Server) Serve() {
 	s.logger.Info(fmt.Sprintf("server start serve, bind address=%s", s.address))
-	for true {
+	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
 			err = s.listener.Close()
@@ -181,7 +181,8 @@ func (s *Server) handleConn(conn net.Conn) {
 	var ctx *ServerContext
 	defer func() {
 		if err := recover(); err != nil {
-			s.logger.Error(fmt.Sprintf("[panic], err=%s, remote address=%s", err, conn.RemoteAddr()))
+			s.logger.Error(fmt.Sprintf("[panic], err=%s, remote address=%s, stack=[%s]",
+				err, conn.RemoteAddr(), string(debug.Stack())))
 		}
 		if ctx != nil {
 			_ = ctx.Close()
@@ -248,7 +249,8 @@ func (s *Server) handleConn(conn net.Conn) {
 func SafelyDo(handler common.Handler, ctx common.Context, message *common.RawMessage) (err error) {
 	defer func() {
 		if e := recover(); e != nil {
-			err = errors.New(fmt.Sprintf("[panic], err=%s, remote address=%s", err, ctx.RemoteAddr()))
+			err = fmt.Errorf("[panic], err=%s, remote address=%s, stack=%s",
+				err, ctx.RemoteAddr(), string(debug.Stack()))
 		}
 	}()
 	return handler.OnMessage(ctx, message)

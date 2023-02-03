@@ -36,16 +36,15 @@ type userHandler struct {
 }
 
 func NewUserHandler() *userHandler {
-	var uh *userHandler
-	uh = &userHandler{
+	uh := &userHandler{
 		onlineUserMap: &sync.Map{},
-		handlerMap: map[common.MessageCode]common.Handler{
-			enum.UserLogin:         &loginHandler{uh: uh},
-			enum.GetOnlineUserList: &getOnlineUserListHandler{uh: uh},
-			enum.UserLogout:        &logoutHandler{uh: uh},
-			enum.SendMessage:       &sendMessageHandler{uh: uh},
-			enum.FileTransfer:      &fileTransferHandler{uh: uh},
-		},
+	}
+	uh.handlerMap = map[common.MessageCode]common.Handler{
+		enum.UserLogin:         &loginHandler{uh: uh},
+		enum.GetOnlineUserList: &getOnlineUserListHandler{uh: uh},
+		enum.UserLogout:        &logoutHandler{uh: uh},
+		enum.SendMessage:       &sendMessageHandler{uh: uh},
+		enum.FileTransfer:      &fileTransferHandler{uh: uh},
 	}
 	return uh
 }
