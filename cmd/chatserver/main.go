@@ -28,6 +28,6 @@ func main() {
 			return nil
 		}))
 	s.AddHandler(enum.Pong, common.NewPongHandler(enum.Ping, time.Second*15, time.Minute))
-	s.AddHandler(handler.UserHandlerCode, handler.GetUserHandler())
+	s.AddHandler(handler.UserHandlerCode, handler.NewUserHandler())
 	s.Serve()
 }

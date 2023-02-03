@@ -10,15 +10,6 @@ import (
 	"time"
 )
 
-var client *goclient.Client
-
-func GetClient() *goclient.Client {
-	if client == nil {
-		panic("client not initialized")
-	}
-	return client
-}
-
 func main() {
 	log.Println("输入要连接的服务器IP端口，不输入默认为localhost:8080")
 	address := util.ScanAddress("localhost:8080")
@@ -28,8 +19,7 @@ func main() {
 		time.Sleep(time.Second * 5)
 		return
 	}
-	cli.SetDispatcher(NewCommandDispatcher(os.Stdin))
-	client = cli
+	cli.SetDispatcher(NewCommandDispatcher(cli, os.Stdin))
 
 	cli.AddHandler(enum.Ping, common.NewPingHandler(enum.Pong))
 	cli.AddHandler(enum.Display, common.NewDisplayHandler(
@@ -37,7 +27,7 @@ func main() {
 			log.Println(msg)
 			return nil
 		}))
-	cli.AddHandler(enum.FileTransfer, NewFileTransferHandler(time.Second*90))
+	cli.AddHandler(enum.FileTransfer, NewFileTransferHandler(cli, time.Second*90))
 	util.AssertNotError(cli.Register(NewLoginCommand()))
 	util.AssertNotError(cli.Register(NewLogoutCommand()))
 	util.AssertNotError(cli.Register(NewGetUserListCommand()))

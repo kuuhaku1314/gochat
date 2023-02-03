@@ -17,43 +17,38 @@ import (
 	"time"
 )
 
-var (
-	fileTransfer *fileTransferHandler
-	once         = &sync.Once{}
-)
-
 type fileTransferHandler struct {
-	sendFileEntity       *msg.FileTransformEntity
-	sendLock             *sync.Mutex
-	sendFile             *os.File
-	lastSendFileTime     int64
-	sendBlock            int64
-	sendBuff             []byte
-	receiveFileEntity    *msg.FileTransformEntity
-	receiveLock          *sync.Mutex
-	receiveFile          *os.File
-	receiveBlock         int64
-	lastReceiveFileTime  int64
-	transferStateMachine map[int8]func(ctx common.Context, file *msg.FileTransformEntity) error
-	timeout              int64
+	sendFileEntity      *msg.FileTransformEntity
+	sendLock            *sync.Mutex
+	sendFile            *os.File
+	lastSendFileTime    int64
+	sendBlock           int64
+	sendBuff            []byte
+	receiveFileEntity   *msg.FileTransformEntity
+	receiveLock         *sync.Mutex
+	receiveFile         *os.File
+	receiveBlock        int64
+	lastReceiveFileTime int64
+	msgHandler          map[int8]func(ctx common.Context, file *msg.FileTransformEntity) error
+	timeout             int64
+	client              *goclient.Client
 }
 
-func NewFileTransferHandler(timeout time.Duration) *fileTransferHandler {
-	once.Do(func() {
-		fileTransfer = &fileTransferHandler{
-			sendBuff:    make([]byte, 1024*64),
-			sendLock:    &sync.Mutex{},
-			receiveLock: &sync.Mutex{},
-			timeout:     int64(timeout.Seconds()),
-		}
-		fileTransfer.transferStateMachine = map[int8]func(ctx common.Context, file *msg.FileTransformEntity) error{
-			msg.FileWaitingSend:   fileTransfer.FileStateWaitingSend,
-			msg.FileReject:        fileTransfer.FileStateReject,
-			msg.FileSending:       fileTransfer.FileStateSending,
-			msg.FileAck:           fileTransfer.FileStateAck,
-			msg.FileSendCompleted: fileTransfer.FileStateCompleted,
-		}
-	})
+func NewFileTransferHandler(client *goclient.Client, timeout time.Duration) *fileTransferHandler {
+	fileTransfer := &fileTransferHandler{
+		sendBuff:    make([]byte, 1024*64),
+		sendLock:    &sync.Mutex{},
+		receiveLock: &sync.Mutex{},
+		timeout:     int64(timeout.Seconds()),
+		client:      client,
+	}
+	fileTransfer.msgHandler = map[int8]func(ctx common.Context, file *msg.FileTransformEntity) error{
+		msg.FileWaitingSend:   fileTransfer.FileStateWaitingSend,
+		msg.FileReject:        fileTransfer.FileStateReject,
+		msg.FileSending:       fileTransfer.FileStateSending,
+		msg.FileAck:           fileTransfer.FileStateAck,
+		msg.FileSendCompleted: fileTransfer.FileStateCompleted,
+	}
 	return fileTransfer
 }
 
@@ -128,7 +123,7 @@ func (h *fileTransferHandler) confirmAccept() *goclient.Command {
 			}, nil
 		},
 		UseParseFunc: true,
-		Tips:         "use like confirm test.png",
+		Tips:         "use confirm to receive file, use like: confirm [path]",
 	}
 }
 
@@ -157,7 +152,7 @@ func (h *fileTransferHandler) rejectAccept() *goclient.Command {
 			return message, nil
 		},
 		UseParseFunc: true,
-		Tips:         "use like reject",
+		Tips:         "use reject to reject receive file",
 	}
 }
 
@@ -184,7 +179,8 @@ func (h *fileTransferHandler) FileStateAck(ctx common.Context, fileTransformEnti
 	})
 	h.lastSendFileTime = time.Now().Unix()
 	h.sendBlock++
-	log.Printf("send file blocksize=[%d], [%d/%d]\n", len(h.sendFileEntity.Content), h.sendBlock, int64(math.Round(float64(h.sendFileEntity.FileSize)/float64(len(h.sendBuff)))))
+	log.Printf("send file blocksize=[%d], [%d/%d]\n", len(h.sendFileEntity.Content), h.sendBlock,
+		int64(math.Round(float64(h.sendFileEntity.FileSize)/float64(len(h.sendBuff)))))
 	if eofFlag {
 		log.Println("send file complete")
 		h.resetSendFile(true)
@@ -229,7 +225,7 @@ func (h *fileTransferHandler) FileStateWaitingSend(ctx common.Context, fileTrans
 func (h *fileTransferHandler) FileStateSending(ctx common.Context, fileTransformEntity *msg.FileTransformEntity) error {
 	h.receiveLock.Lock()
 	defer h.receiveLock.Unlock()
-	if !h.checkReceive(fileTransformEntity, msg.FileAccept) {
+	if !h.validateReceiveFile(fileTransformEntity, msg.FileAccept) {
 		return nil
 	}
 	h.lastReceiveFileTime = time.Now().Unix()
@@ -238,7 +234,8 @@ func (h *fileTransferHandler) FileStateSending(ctx common.Context, fileTransform
 	if err != nil {
 		return err
 	}
-	log.Printf("receiving file blocksize=[%d], [%d/%d]\n", len(fileTransformEntity.Content), h.receiveBlock, int64(math.Ceil(float64(h.receiveFileEntity.FileSize)/float64(len(h.sendBuff)))))
+	log.Printf("receiving file blocksize=[%d], [%d/%d]\n", len(fileTransformEntity.Content), h.receiveBlock,
+		int64(math.Ceil(float64(h.receiveFileEntity.FileSize)/float64(len(h.sendBuff)))))
 	if _, err := h.receiveFile.Write(bytes); err != nil {
 		return err
 	}
@@ -255,7 +252,7 @@ func (h *fileTransferHandler) FileStateSending(ctx common.Context, fileTransform
 func (h *fileTransferHandler) FileStateCompleted(_ common.Context, fileTransformEntity *msg.FileTransformEntity) error {
 	h.receiveLock.Lock()
 	defer h.receiveLock.Unlock()
-	if !h.checkReceive(fileTransformEntity, msg.FileAccept) {
+	if !h.validateReceiveFile(fileTransformEntity, msg.FileAccept) {
 		return nil
 	}
 	h.lastReceiveFileTime = time.Now().Unix()
@@ -264,7 +261,8 @@ func (h *fileTransferHandler) FileStateCompleted(_ common.Context, fileTransform
 	if err != nil {
 		return err
 	}
-	log.Printf("receiving file blocksize=[%d], [%d/%d]\n", len(fileTransformEntity.Content), h.receiveBlock, int64(math.Ceil(float64(h.receiveFileEntity.FileSize)/float64(len(h.sendBuff)))))
+	log.Printf("receiving file blocksize=[%d], [%d/%d]\n", len(fileTransformEntity.Content), h.receiveBlock,
+		int64(math.Ceil(float64(h.receiveFileEntity.FileSize)/float64(len(h.sendBuff)))))
 	if _, err := h.receiveFile.Write(bytes); err != nil {
 		return err
 	}
@@ -278,7 +276,7 @@ func (h *fileTransferHandler) OnMessage(ctx common.Context, rawMessage *common.R
 	if err := json.Unmarshal(rawMessage.RawData, message); err != nil {
 		return err
 	}
-	f, ok := h.transferStateMachine[message.State]
+	f, ok := h.msgHandler[message.State]
 	if !ok {
 		log.Println("invalid state")
 		return nil
@@ -292,7 +290,7 @@ func (h *fileTransferHandler) OnClose(_ common.Context) {}
 
 func (h *fileTransferHandler) OnInit(_ common.Env) {
 	for _, command := range h.commands() {
-		util.AssertNotError(GetClient().Register(command))
+		util.AssertNotError(h.client.Register(command))
 	}
 	ticker := time.NewTicker(time.Second * 5)
 	go func() {
@@ -340,7 +338,7 @@ func (h *fileTransferHandler) notifySendFile(localID, remoteID, filepath string)
 	h.sendLock.Lock()
 	defer h.sendLock.Unlock()
 	if h.sendFileEntity != nil {
-		log.Printf("已经有文件在发送了，请等待发送完成, 若正在等待对方确认中，请等待%d秒后自动取消发送\n",
+		log.Printf("当前存在发送中文件，请等待发送完成, 若正在等待对方确认中，请等待%d秒后自动取消发送\n",
 			h.lastSendFileTime+h.timeout-time.Now().Unix())
 		return nil
 	}
@@ -366,7 +364,7 @@ func (h *fileTransferHandler) notifySendFile(localID, remoteID, filepath string)
 		State:    msg.FileWaitingSend,
 	}
 	h.lastSendFileTime = time.Now().Unix()
-	GetClient().SendMessage(&common.Message{
+	h.client.SendMessage(&common.Message{
 		Code:    enum.FileTransfer,
 		RawData: h.sendFileEntity,
 	})
@@ -424,7 +422,7 @@ func (h *fileTransferHandler) checkSend(fileTransformEntity *msg.FileTransformEn
 	return true
 }
 
-func (h *fileTransferHandler) checkReceive(fileTransformEntity *msg.FileTransformEntity, targetState int8) bool {
+func (h *fileTransferHandler) validateReceiveFile(fileTransformEntity *msg.FileTransformEntity, targetState int8) bool {
 	if h.receiveFileEntity == nil {
 		log.Println("invalid sending request")
 		return false
@@ -433,7 +431,8 @@ func (h *fileTransferHandler) checkReceive(fileTransformEntity *msg.FileTransfor
 		log.Println("invalid sending sender")
 		return false
 	}
-	if h.receiveFileEntity.FileSize != fileTransformEntity.FileSize || h.receiveFileEntity.FileName != h.receiveFileEntity.FileName {
+	if h.receiveFileEntity.FileSize != fileTransformEntity.FileSize ||
+		h.receiveFileEntity.FileName != fileTransformEntity.FileName {
 		log.Println("invalid file")
 		return false
 	}

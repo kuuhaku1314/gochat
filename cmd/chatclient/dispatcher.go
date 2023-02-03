@@ -13,6 +13,7 @@ import (
 type commandDispatcher struct {
 	*bufio.Scanner
 	commandMap map[string]*goclient.Command
+	client     *goclient.Client
 }
 
 func (c *commandDispatcher) Dispatch() {
@@ -42,7 +43,7 @@ func (c *commandDispatcher) Dispatch() {
 			log.Println("parse params error")
 			continue
 		}
-		GetClient().SendMessage(message)
+		c.client.SendMessage(message)
 	}
 	log.Println("quit dispatcher")
 }
@@ -85,10 +86,11 @@ func (c *commandDispatcher) Register(command *goclient.Command) error {
 	return nil
 }
 
-func NewCommandDispatcher(reader io.Reader) goclient.Dispatcher {
+func NewCommandDispatcher(client *goclient.Client, reader io.Reader) goclient.Dispatcher {
 	dispatcher := &commandDispatcher{
 		Scanner:    bufio.NewScanner(reader),
 		commandMap: make(map[string]*goclient.Command),
+		client:     client,
 	}
 	listCommand := &goclient.Command{
 		Command: "list",
@@ -135,7 +137,7 @@ func NewCommandDispatcher(reader io.Reader) goclient.Dispatcher {
 		Command: "exit",
 		LocalParseFunc: func(params string) error {
 			log.Println("exit client success")
-			_ = GetClient().Close()
+			_ = client.Close()
 			return nil
 		},
 		Tips: "exit process",
